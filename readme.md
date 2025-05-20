@@ -47,7 +47,7 @@ bottom right: 52.02743574217603, 4.404156672597446
 ## filteren bomen obv waarde voor bijen
 
 gebruik pollen tabel imkerpedia - https://www.imkerpedia.nl/wiki/index.php/Drachtplanten
-
+yank table and put it into a csv
 
 ## filteren bomen op basis van aanwezigheid in drachtplanten lijst
 
@@ -101,3 +101,11 @@ jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' bo
 
 
 ## clusteren bomen/shapes obv dichtbijheid van elkaar / grouperen shapes -> Vlakken van maken
+
+
+
+import the CSV with markers into google maps -> https://www.google.com/maps/d/u/0/edit?hl=en&mid=1rEXjvP8rAoK41iPF5tkkcRLcWMVaP8c&ll=52.03850518347734%2C4.366191369035044&z=15
+
+and... profit!
+
+![profit](experimental-result.png)
