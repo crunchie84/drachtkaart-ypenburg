@@ -99,7 +99,6 @@ jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' bo
 
 
 
-
 ## clusteren bomen/shapes obv dichtbijheid van elkaar / grouperen shapes -> Vlakken van maken
 
 
@@ -109,3 +108,8 @@ import the CSV with markers into google maps -> https://www.google.com/maps/d/u/
 and... profit!
 
 ![profit](experimental-result.png)
+
+
+## credits
+
+rijksdriehoek to wgs84 script copied from https://gist.github.com/erikvullings/a2c58cecc3f0a27b043deba90089af57
