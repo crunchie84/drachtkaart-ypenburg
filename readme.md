@@ -49,8 +49,13 @@ bottom right: 52.02743574217603, 4.404156672597446
 gebruik pollen tabel imkerpedia - https://www.imkerpedia.nl/wiki/index.php/Drachtplanten
 yank table and put it into a csv
 
-## filteren bomen op basis van aanwezigheid in drachtplanten lijst
+## opschonene bomen namen voor betere matching
+TODO
 
+bv "Tilia x europaea 'Euchlora'" fixxen
+
+
+## filteren bomen op basis van aanwezigheid in drachtplanten lijst
 
 `jq --slurpfile ids drachtplanten-ids.json 'map(select(.properties.BOOMSOORT_WETENSCHAPPELIJ as $id | $ids[0] | index($id)))' bomenkaart-ypenburg.json > bomenkaart-ypenburg-filtered.json`
 
@@ -93,15 +98,82 @@ jq 'map({
 cp bomenkaart-ypenburg-prep4export-flattened.json ../RijksDriehoekConverter
 cd ../RijksDriehoekConverter
 ts-node index.ts > bomenkaart-ypenburg-prep4export-Wgs84-flattened.json
+cp bomenkaart-ypenburg-prep4export-Wgs84-flattened.json ../source
 
 
-jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' bomenkaart-ypenburg-prep4export-Wgs84-flattened.json > bomenkaart-ypenburg-prep4export-Wgs84-flattened.csv
+## TODO clusteren bomen/shapes obv dichtbijheid van elkaar / grouperen shapes -> Vlakken van maken
 
 
+# Bomenkaart Delft deel toevoegen
 
-## clusteren bomen/shapes obv dichtbijheid van elkaar / grouperen shapes -> Vlakken van maken
+links onder coordinaat = 52.02691, 4.34384
+rechts boven coordinaat = 52.05377, 4.40361
+
+- https://openbomenkaart.org/data/trees_delft.json
+- filteren obv coordinaten die dichtbij genoeg zijn
+
+`jq '.elements | map(select(.lat >= 52.02691 and .lat <= 52.05377 and .lon >= 4.34384 and .lon <= 4.40361))' trees_delft.json > filtered-local-trees-delft.json`
+
+- convert naming of trees that mismatch the drachtplanten list
+
+// remove everything between ''
+// remove everythign between ()
+// remove any trailing spaces
+Aesculus carnea => Aesculus x carnea
+Tilia europaea 'Zwarte Linde' => Tilia x europaea
 
 
+```
+jq 'select(.) | map(.tags.species |= gsub("\\([^)]*\\)"; ""))' filtered-local-trees-delft.json \
+    | jq "map(.tags.species |= gsub(\"'[^']*'\"; \"\"))" \
+    | jq 'map(.tags.species |= gsub("^\\s+|\\s+$"; ""))' \
+    | jq 'map(if .tags.species == "Aesculus carnea" then .tags.species = "Aesculus x carnea" else . end)' \
+    | jq 'map(if .tags.species == "Tilia europaea" then .tags.species = "Tilia x europaea" else . end)' \
+    > filtered-cleanup-local-trees-delft.json
+```
+
+- remove all non-drachtplanten from the list
+
+`jq --slurpfile ids drachtplanten-ids.json 'map(select(.tags.species as $id | $ids[0] | index($id)))' filtered-cleanup-local-trees-delft.json > filtered-only-drachtplanten-local-trees-delft.json`
+
+- enrich pollen information
+
+jq --slurpfile enrichment drachtplanten-imkerpedia.json 'map(. as $item |
+       ($enrichment[0][] | select(.["Latijnse naam"] == $item.tags.species)) as $match |
+       if $match then
+           $item + {
+               tags: ($item.tags + {
+                   Nectarwaarde: $match.Nectarwaarde,
+                   Pollenwaarde: $match.Pollenwaarde,
+                   SB: $match.SB,
+                   EB: $match.EB,
+                   BOOMSOORT_NEDERLANDS: $match."Nederlandse naam"
+               })
+           }
+       else
+           $item
+       end
+   )' filtered-only-drachtplanten-local-trees-delft.json > filtered-only-drachtplanten-local-trees-delft-enriched.json
+
+- map trees to format that we need
+
+jq 'map({ 
+    latitude: .lat, 
+    longitude: .lon, 
+    title: "\(.tags.BOOMSOORT_NEDERLANDS) (\(.tags.species))",
+    body: "Nectarwaarde: \(.tags.Nectarwaarde), Pollenwaarde: \(.tags.Pollenwaarde), Bloeit van \(.tags.SB) t/m \(.tags.EB)" 
+    })' filtered-only-drachtplanten-local-trees-delft-enriched.json > output-delft-trees-formatted.json
+
+
+## MERGE DEN HAAG + DELFT 
+
+After converting rijkds driehoek also to lat lon using typescript
+
+jq -s 'add' output-delft-trees-formatted.json bomenkaart-ypenburg-prep4export-Wgs84-flattened.json > merged-output-delft-denhaag.json
+
+
+## convert to CSV and import into google maps
+`jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' merged-output-delft-denhaag.json > merged-output-delft-denhaag.csv`
 
 import the CSV with markers into google maps -> https://www.google.com/maps/d/u/0/edit?hl=en&mid=1rEXjvP8rAoK41iPF5tkkcRLcWMVaP8c&ll=52.03850518347734%2C4.366191369035044&z=15
 
