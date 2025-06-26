@@ -6,9 +6,11 @@ Combinatie van de bomenkaarten delft, den haag (nootdorp?) en de drachtplanten i
 
 ## TODOs
 
-- splitsen van de dracht informatie in meerdere lagen - lente / zomer / herfst zodat zichtbaar wordt wanneer er minder drachtaanbod beschikbaar is
-- TODO clusteren bomen/shapes obv dichtbijheid van elkaar / grouperen shapes -> Vlakken van maken ? hoe dan? export in csv kan dat niet, KML?
-
+- [] splitsen van de dracht informatie in meerdere lagen - lente / zomer / herfst zodat zichtbaar wordt wanneer er minder drachtaanbod beschikbaar is
+- [] TODO clusteren bomen/shapes obv dichtbijheid van elkaar / grouperen shapes -> Vlakken van maken ? hoe dan? export in csv kan dat niet, KML?
+- [x] Data fouten in denhaag vinden - welke bomen zijn er uitgefilterd obv typo's die er hadden moeten zijn?
+- [] TODO - import in google maps is max 2000 datapunten per layer, max 10 layers totaal 10.000 datapunten -> clusteren?
+  - specs KML layer om shapes te importeren? https://developers.google.com/maps/documentation/javascript/kmllayer?csw=1 
 
 ## Den Haag Bomen Data
 
@@ -68,14 +70,26 @@ yank table and put it into a csv
 
 bv "Tilia x europaea 'Euchlora'" fixxen
 
+alles tussen '' weghalen
+alles tussen () weghalen
+training spaces weghalen
+```
+jq 'select(.) | map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub("\\([^)]*\\)"; ""))' bomenkaart-ypenburg.json \
+    | jq "map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub(\"'[^']*'\"; \"\"))" \
+    | jq 'map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub("^\\s+|\\s+$"; ""))' \
+    > bomenkaart-cleanedup-ypenburg.json
+```
+
+
+
 
 ### filteren bomen op basis van aanwezigheid in drachtplanten lijst
 
-`jq --slurpfile ids drachtplanten-ids.json 'map(select(.properties.BOOMSOORT_WETENSCHAPPELIJ as $id | $ids[0] | index($id)))' bomenkaart-ypenburg.json > bomenkaart-ypenburg-filtered.json`
+`jq --slurpfile ids drachtplanten-ids.json 'map(select(.properties.BOOMSOORT_WETENSCHAPPELIJ as $id | $ids[0] | index($id)))' bomenkaart-cleanedup-ypenburg.json > bomenkaart-ypenburg-filtered.json`
 
 ### converteren drachtplanten csv naar json
 
-`csvjson drachtplanten-imkerpedia.csv | jq '.' > drachtplanten-imkerpedia.jso` 
+`csvjson drachtplanten-imkerpedia.csv | jq '.' > drachtplanten-imkerpedia.json` 
 
 
 ### toevoegen drachtinformatie aan bomenkaart ypenburg
@@ -113,6 +127,7 @@ cp bomenkaart-ypenburg-prep4export-flattened.json ../RijksDriehoekConverter
 cd ../RijksDriehoekConverter
 ts-node index.ts > bomenkaart-ypenburg-prep4export-Wgs84-flattened.json
 cp bomenkaart-ypenburg-prep4export-Wgs84-flattened.json ../source
+cd ../source
 
 
 ## Delft Bomen Data
