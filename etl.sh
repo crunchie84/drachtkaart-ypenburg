@@ -13,6 +13,10 @@ echo "Converting tree information from The Hague to zoom in on Ypenburg and only
 # extract only ypenburg area
 jq '.features | map(select(.geometry.coordinates[0] >= 83395 and .geometry.coordinates[0] <= 87537 and .geometry.coordinates[1] >= 449244 and .geometry.coordinates[1] <= 452175))' source/bomen-json.json > tmp/bomenkaart-ypenburg.json
 # clean up data names
+# // remove everything between ''
+# // remove everythign between ()
+# // remove any trailing spaces
+
 jq 'select(.) | map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub("\\([^)]*\\)"; ""))' tmp/bomenkaart-ypenburg.json \
     | jq "map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub(\"'[^']*'\"; \"\"))" \
     | jq 'map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub("^\\s+|\\s+$"; ""))' \
@@ -40,6 +44,8 @@ jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
 # transform the list to the output format we need for google maps
 jq 'map({
   coordinateRD: "\(.geometry.coordinates[1]) \(.geometry.coordinates[0])",
+  Pollenwaarde: .properties.Pollenwaarde,
+  Nectarwaarde: .properties.Nectarwaarde,
   title: "\(.properties.BOOMSOORT_NEDERLANDS) (\(.properties.BOOMSOORT_WETENSCHAPPELIJ))",
   body: "Nectarwaarde: \(.properties.Nectarwaarde) , Pollenwaarde: \(.properties.Pollenwaarde), Bloeit van \(.properties.SB) t/m \(.properties.EB)",
 })' tmp/bomenkaart-ypenburg-filtered-enriched.json > tmp/bomenkaart-ypenburg-prep4export-flattened.json
@@ -57,7 +63,13 @@ echo "Converting tree information from Delft to zoom in on Ypenburg and only ren
 # filter only trees in ypenburg area
 jq '.elements | map(select(.lat >= 52.02691 and .lat <= 52.05377 and .lon >= 4.34384 and .lon <= 4.40361))' source/trees_delft.json > tmp/filtered-local-trees-delft.json
 
-#cleanup tree names
+# cleanup tree names
+# // remove everything between ''
+# // remove everythign between ()
+# // remove any trailing spaces
+# Aesculus carnea => Aesculus x carnea
+# Tilia europaea 'Zwarte Linde' => Tilia x europaea
+
 jq 'select(.) | map(.tags.species |= gsub("\\([^)]*\\)"; ""))' tmp/filtered-local-trees-delft.json \
     | jq "map(.tags.species |= gsub(\"'[^']*'\"; \"\"))" \
     | jq 'map(.tags.species |= gsub("^\\s+|\\s+$"; ""))' \
@@ -89,7 +101,9 @@ jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
 # convert format to the output format we need
 jq 'map({ 
     latitude: .lat, 
-    longitude: .lon, 
+    longitude: .lon,
+    Pollenwaarde: .tags.Pollenwaarde,
+    Nectarwaarde: .tags.Nectarwaarde,
     title: "\(.tags.BOOMSOORT_NEDERLANDS) (\(.tags.species))",
     body: "Nectarwaarde: \(.tags.Nectarwaarde), Pollenwaarde: \(.tags.Pollenwaarde), Bloeit van \(.tags.SB) t/m \(.tags.EB)" 
     })' tmp/filtered-only-drachtplanten-local-trees-delft-enriched.json > tmp/output-delft-trees-formatted.json
@@ -97,6 +111,50 @@ jq 'map({
 echo "Merging data into one master dataset for trees in Ypenburg..."
 
 jq -s 'add' tmp/output-delft-trees-formatted.json tmp/bomenkaart-ypenburg-prep4export-Wgs84-flattened.json > tmp/merged-output-delft-denhaag.json
-jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/merged-output-delft-denhaag.json > output/merged-output-delft-denhaag.csv
 
+# only keep trees where the nectar or pollen value is greater then 3
+jq 'map(select(((.Nectarwaarde | tonumber? // 0) > 3) or ((.Pollenwaarde | tonumber? // 0) > 3) ))' tmp/merged-output-delft-denhaag.json > tmp/merged-output-delft-denhaag-filtered-pollen.json
+
+# final cleanup to remove columns we no longer need
+jq 'map({
+    latitude: .latitude, 
+    longitude: .longitude,
+    Pollenwaarde: .Pollenwaarde,
+    Nectarwaarde: .Nectarwaarde,
+    title: .title,
+    body: .body
+})' tmp/merged-output-delft-denhaag-filtered-pollen.json > tmp/merged-output-delft-denhaag-filtered-pollen-cleaned-up.json
+
+#
+# OUTPUT TO FINAL FILES // CHUNKING
+#
+
+
+jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/merged-output-delft-denhaag-filtered-pollen-cleaned-up.json > output/merged-output-delft-denhaag.csv
 echo "The masterlist is done! -> output/merged-output-delft-denhaag.csv"
+
+## splitting in max 2000 items because google maps limitations (as test)
+
+INPUT_FILE="tmp/merged-output-delft-denhaag-filtered-pollen-cleaned-up.json"
+OUTPUT_PREFIX="tmp/merged-output-delft-denhaag_chunk"
+OUTPUT_CSV_PREFIX="output/merged-output-delft-denhaag_chunk"
+CHUNK_SIZE=2000
+
+# Get the total number of items in the array
+TOTAL_ITEMS=$(jq 'length' "$INPUT_FILE")
+
+# Calculate the number of chunks
+NUM_CHUNKS=$(( (TOTAL_ITEMS + CHUNK_SIZE - 1) / CHUNK_SIZE ))
+
+echo "Splitting $TOTAL_ITEMS items into $NUM_CHUNKS chunks..."
+
+# Loop through and split
+for ((i=0; i<NUM_CHUNKS; i++)); do
+    START=$((i * CHUNK_SIZE))
+    END=$((START + CHUNK_SIZE - 1))
+    jq ".[$START:$((START + CHUNK_SIZE))]" "$INPUT_FILE" > "${OUTPUT_PREFIX}_${i}.json"
+    jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' "${OUTPUT_PREFIX}_${i}.json" > "${OUTPUT_CSV_PREFIX}_${i}.csv"
+    echo "Created ${OUTPUT_PREFIX}_${i}.json with items $START to $END"
+done
+
+echo "Done."
