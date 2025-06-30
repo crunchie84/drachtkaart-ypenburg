@@ -43,10 +43,10 @@ filteren van
 type.features
 			based on gemoetry.coordinates [x, y]
 
-
+```
 jq '.features[]' bomen-json.json
 jq '.features | map(select(.geometry.coordinates[0] >= 83395 and .geometry.coordinates[0] <= 87537 and .geometry.coordinates[1] >= 449244 and .geometry.coordinates[1] <= 452175))' bomen-json.json
-
+```
 
 converteren coordinaten -> https://benhup.com/tools/convert-coordinates/
 
