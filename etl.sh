@@ -171,7 +171,7 @@ jq 'map({
 
 echo "Merging data into one master dataset for trees in Ypenburg..."
 
-jq -s 'add' tmp/output-delft-trees-formatted.json tmp/bomenkaart-ypenburg_CleanedUpNamesFilteredEnriched_RDS2LatLon.json tmp/bomenkaart-ypenburg_CleanedUpNamesFilteredEnriched_RDS2LatLon.json > tmp/merged-output.json
+jq -s 'add' tmp/output-delft-trees-formatted.json tmp/bomenkaart-ypenburg_CleanedUpNamesFilteredEnriched_RDS2LatLon.json tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched_RDS2LatLon.json > tmp/merged-output.json
 
 # only keep trees where the nectar or pollen value is greater then 3
 jq 'map(select(((.Nectarwaarde | tonumber? // 0) > 3) or ((.Pollenwaarde | tonumber? // 0) > 3) ))' tmp/merged-output.json > tmp/merged-output-filtered-pollen.json
