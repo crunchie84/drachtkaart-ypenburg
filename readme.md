@@ -29,7 +29,7 @@ Combinatie van de bomenkaarten delft, den haag (nootdorp?) en de drachtplanten i
 	- only retian the name/nl name/x/y fields in the excel and export to csv
 	- `csvjson Bomenbestand-Nootdorp-20250701.csv | jq '.' > Bomenbestand-Nootdorp-20250701.json`
 	- find all the unique tree names to determine cleanup rules `jq '[.[] | .Soortnaam | select(length > 0)] | unique' Bomenbestand-Nootdorp-20250701.json > Bomenbestand-Nootdorp-Unique-Bomen.json`
-	
+
 
 
 ## Den Haag Bomen Data
@@ -88,4 +88,4 @@ and... profit!
 
 ## credits
 
-rijksdriehoek to wgs84 script copied from https://gist.github.com/erikvullings/a2c58cecc3f0a27b043deba90089af57
+rijksdriehoek to wgs84 script copied from https://github.com/arjendeblok/rd2wgs84/tree/main
