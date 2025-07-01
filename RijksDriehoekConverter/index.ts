@@ -3,8 +3,9 @@ import * as process from 'process';
 import { resolve } from 'path';
 import { rds, rd2WGS84 } from './rds/rd2wgs84';
 
-const args = process.argv.slice(2);
+const isDebugMode = false;
 
+const args = process.argv.slice(2);
 if (args.length === 0) {
     console.error('Please provide a path to a JSON file.');
     process.exit(1);
@@ -23,6 +24,10 @@ const result = inputParsed.map((item: any) => {
 
     const coordinates = rd2WGS84(rds);
 
+    if(isDebugMode) {
+        console.log(`- input=${JSON.stringify(rds)}, output=${JSON.stringify(coordinates)}`);
+    }
+
     return {
         latitude: coordinates.lat,
         longitude: coordinates.lon,
@@ -30,5 +35,9 @@ const result = inputParsed.map((item: any) => {
     }
 });
 
-
-console.log(JSON.stringify(result, null, '  '));
+if(!isDebugMode){
+    console.log(JSON.stringify(result, null, '  '));
+}
+else{
+    console.log("done...");
+}

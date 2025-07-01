@@ -103,7 +103,7 @@ jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
 
 # transform the list to the output format we need for google maps
 jq 'map({
-  coordinateRD: "\(.geometry.coordinates[1]) \(.geometry.coordinates[0])",
+  coordinateRD: "\(.geometry.coordinates[0]) \(.geometry.coordinates[1])",
   Pollenwaarde: .properties.Pollenwaarde,
   Nectarwaarde: .properties.Nectarwaarde,
   title: "\(.properties.BOOMSOORT_NEDERLANDS) (\(.properties.BOOMSOORT_WETENSCHAPPELIJ))",
