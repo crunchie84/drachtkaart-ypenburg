@@ -25,6 +25,11 @@ Combinatie van de bomenkaarten delft, den haag (nootdorp?) en de drachtplanten i
     - extract the ids of the drachtplanten `jq '[.[]."Latijnse naam"]' drachtplanten-imkerpedia.json . drachtplanten-ids.json`
     - cleanup the nectarwaarde/pollenwaarde fields to only contain digits
         - `jq 'map(.Nectarwaarde |= gsub("[^0-9]+"; ""))' drachtplanten-imkerpedia.json | jq 'map(.Pollenwaarde |= gsub("[^0-9]+"; ""))' > drachtplanten-imkerpedia-cleanedup.json`
+- Retrieve the bomen data export from Nootdorp via e-mail to the municipality
+	- only retian the name/nl name/x/y fields in the excel and export to csv
+	- `csvjson Bomenbestand-Nootdorp-20250701.csv | jq '.' > Bomenbestand-Nootdorp-20250701.json`
+	- find all the unique tree names to determine cleanup rules `jq '[.[] | .Soortnaam | select(length > 0)] | unique' Bomenbestand-Nootdorp-20250701.json > Bomenbestand-Nootdorp-Unique-Bomen.json`
+	
 
 
 ## Den Haag Bomen Data

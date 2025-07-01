@@ -8,7 +8,67 @@ set -euo pipefail
 
 rm tmp/*.json
 
-echo "Converting tree information from The Hague to zoom in on Ypenburg and only render trees relevant for honeybees..."
+
+echo "Converting tree information from Pijnacker-Nootdorp dataset to zoom in on Ypenburg and only render trees relevant for honeybees..."
+
+# only take the ypenburg area
+
+jq '. | map(select(.X >= 83395 and .X <= 87537 and .Y >= 449244 and .Y <= 452175))' source/Bomenbestand-Nootdorp-20250701.json > tmp/Bomenbestand-Nootdorp_YpenburgArea.json
+
+# clean up data names
+# skip all trees which have no Soortnaam
+# // remove everything between ''
+# // remove everythign between ()
+# // remove any trailing spaces
+# // remove any remaining '
+# Typo -> Acer cappadocium -> Acer cappadocicum 
+# Typo -> Acer cappadorcicum -> Acer cappadocicum 
+# Typo -> Acer platanoides s Black -> Acer platanoides
+# Typo -> Malus domestica s Orange Pippin' -> Malus domestica
+# Typo -> Sorbus thuringiaca -> Sorbus x thuringiaca
+# Typo -> Tilia europaea -> Tilia x europaea
+jq '[.[] | select(.Soortnaam and (.Soortnaam | test("\\S")))]' tmp/Bomenbestand-Nootdorp_YpenburgArea.json \
+    | jq 'select(.) | map(.Soortnaam |= gsub("\\([^)]*\\)"; ""))' \
+    | jq "map(.Soortnaam |= gsub(\"'[^']*'\"; \"\"))" \
+    | jq 'map(.Soortnaam |= gsub("^\\s+|\\s+$"; ""))' \
+    | jq "map(.Soortnaam |= gsub(\"'\"; \"\"))" \
+    | jq 'map(if .Soortnaam == "Acer cappadocium" then .Soortnaam = "Acer cappadocicum" else . end)' \
+    | jq 'map(if .Soortnaam == "Acer cappadorcicum" then .Soortnaam = "Acer cappadocicum" else . end)' \
+    | jq 'map(if .Soortnaam == "Acer platanoides s Black" then .Soortnaam = "Acer platanoides" else . end)' \
+    | jq 'map(if .Soortnaam == "Malus domestica s Orange Pippin" then .Soortnaam = "Malus domestica" else . end)' \
+    | jq 'map(if .Soortnaam == "Sorbus thuringiaca" then .Soortnaam = "Sorbus x thuringiaca" else . end)' \
+    | jq 'map(if .Soortnaam == "Tilia europaea" then .Soortnaam = "Tilia x europaea" else . end)' \
+    > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNames.json
+# filter only trees that are in the list of plants relevant for honeybees
+jq --slurpfile ids source/drachtplanten-ids.json 'map(select(.Soortnaam as $id | $ids[0] | index($id)))' tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNames.json > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFiltered.json
+
+# append honeybee tree info to the output
+jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
+       ($enrichment[0][] | select(.["Latijnse naam"] == $item.Soortnaam)) as $match |
+       if $match then
+           $item + {
+                Nectarwaarde: $match.Nectarwaarde,
+                Pollenwaarde: $match.Pollenwaarde,
+                SB: $match.SB,
+                EB: $match.EB
+           }
+       else
+           $item
+       end
+   )' tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFiltered.json > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched.json
+
+jq 'map({
+  coordinateRD: "\(.X) \(.Y)",
+  Pollenwaarde: .Pollenwaarde,
+  Nectarwaarde: .Nectarwaarde,
+  title: "\(.["Soortnaam Nederlands"]) (\(.Soortnaam))",
+  body: "Nectarwaarde: \(.Nectarwaarde) , Pollenwaarde: \(.Pollenwaarde), Bloeit van \(.SB) t/m \(.EB)",
+})' tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched.json > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched_Prep4Export.json
+
+#convert Rijksdriehoek to GPS lat/lon
+ts-node RijksDriehoekConverter/index.ts tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched_Prep4Export.json > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched_RDS2LatLon.json
+
+echo "Converting tree information from The Hague dataset to zoom in on Ypenburg and only render trees relevant for honeybees..."
 
 # extract only ypenburg area
 jq '.features | map(select(.geometry.coordinates[0] >= 83395 and .geometry.coordinates[0] <= 87537 and .geometry.coordinates[1] >= 449244 and .geometry.coordinates[1] <= 452175))' source/bomen-json.json > tmp/bomenkaart-ypenburg.json
@@ -51,15 +111,11 @@ jq 'map({
 })' tmp/bomenkaart-ypenburg-filtered-enriched.json > tmp/bomenkaart-ypenburg-prep4export-flattened.json
 
 # convert rijksdriehoek to lat/long
-cp tmp/bomenkaart-ypenburg-prep4export-flattened.json RijksDriehoekConverter
-cd RijksDriehoekConverter
-ts-node index.ts > ../tmp/bomenkaart-ypenburg-prep4export-Wgs84-flattened.json
-#cp bomenkaart-ypenburg-prep4export-Wgs84-flattened.json ../source
-cd ..
+ts-node RijksDriehoekConverter/index.ts tmp/bomenkaart-ypenburg-prep4export-flattened.json > tmp/bomenkaart-ypenburg_CleanedUpNamesFilteredEnriched_RDS2LatLon.json
 
 
 
-echo "Converting tree information from Delft to zoom in on Ypenburg and only render trees relevant for honeybees..."
+echo "Converting tree information from Delft dataset to zoom in on Ypenburg and only render trees relevant for honeybees..."
 # filter only trees in ypenburg area
 jq '.elements | map(select(.lat >= 52.02691 and .lat <= 52.05377 and .lon >= 4.34384 and .lon <= 4.40361))' source/trees_delft.json > tmp/filtered-local-trees-delft.json
 
@@ -108,12 +164,17 @@ jq 'map({
     body: "Nectarwaarde: \(.tags.Nectarwaarde), Pollenwaarde: \(.tags.Pollenwaarde), Bloeit van \(.tags.SB) t/m \(.tags.EB)" 
     })' tmp/filtered-only-drachtplanten-local-trees-delft-enriched.json > tmp/output-delft-trees-formatted.json
 
+#
+# MERGE ALL THE DATASETS
+#
+
+
 echo "Merging data into one master dataset for trees in Ypenburg..."
 
-jq -s 'add' tmp/output-delft-trees-formatted.json tmp/bomenkaart-ypenburg-prep4export-Wgs84-flattened.json > tmp/merged-output-delft-denhaag.json
+jq -s 'add' tmp/output-delft-trees-formatted.json tmp/bomenkaart-ypenburg_CleanedUpNamesFilteredEnriched_RDS2LatLon.json tmp/bomenkaart-ypenburg_CleanedUpNamesFilteredEnriched_RDS2LatLon.json > tmp/merged-output.json
 
 # only keep trees where the nectar or pollen value is greater then 3
-jq 'map(select(((.Nectarwaarde | tonumber? // 0) > 3) or ((.Pollenwaarde | tonumber? // 0) > 3) ))' tmp/merged-output-delft-denhaag.json > tmp/merged-output-delft-denhaag-filtered-pollen.json
+jq 'map(select(((.Nectarwaarde | tonumber? // 0) > 3) or ((.Pollenwaarde | tonumber? // 0) > 3) ))' tmp/merged-output.json > tmp/merged-output-filtered-pollen.json
 
 # final cleanup to remove columns we no longer need
 jq 'map({
@@ -123,19 +184,19 @@ jq 'map({
     Nectarwaarde: .Nectarwaarde,
     title: .title,
     body: .body
-})' tmp/merged-output-delft-denhaag-filtered-pollen.json > tmp/merged-output-delft-denhaag-filtered-pollen-cleaned-up.json
+})' tmp/merged-output-filtered-pollen.json > tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json
 
 #
 # OUTPUT TO FINAL FILES // CHUNKING
 #
 
 
-jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/merged-output-delft-denhaag-filtered-pollen-cleaned-up.json > output/merged-output-delft-denhaag.csv
-echo "The masterlist is done! -> output/merged-output-delft-denhaag.csv"
+jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json > output/merged-output-filtered-pollenindex-cleanedup-formatted.csv
+echo "The masterlist is done! -> output/merged-output-filtered-pollenindex-cleanedup-formatted.csv"
 
 ## splitting in max 2000 items because google maps limitations (as test)
 
-INPUT_FILE="tmp/merged-output-delft-denhaag-filtered-pollen-cleaned-up.json"
+INPUT_FILE="tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json"
 OUTPUT_PREFIX="tmp/merged-output-delft-denhaag_chunk"
 OUTPUT_CSV_PREFIX="output/merged-output-delft-denhaag_chunk"
 CHUNK_SIZE=2000
