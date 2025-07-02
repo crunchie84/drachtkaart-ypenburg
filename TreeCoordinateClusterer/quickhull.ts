@@ -1,48 +1,5 @@
 export type Point = { x: number; y: number };
 
-export function quickHull2(points: Point[]): Point[] {
-    if (points.length < 3) return points;
-
-    const getSide = (a: Point, b: Point, p: Point): number =>
-        (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
-
-    const distance = (a: Point, b: Point, p: Point): number =>
-        Math.abs((b.x - a.x) * (a.y - p.y) - (a.x - p.x) * (b.y - a.y));
-
-    const findHull = (set: Point[], a: Point, b: Point, side: number, hull: Point[]) => {
-        let index = -1;
-        let maxDist = 0;
-
-        for (let i = 0; i < set.length; i++) {
-            const temp = distance(a, b, set[i]);
-            if (getSide(a, b, set[i]) === side && temp > maxDist) {
-                index = i;
-                maxDist = temp;
-            }
-        }
-
-        if (index === -1) {
-            hull.push(b);
-            return;
-        }
-
-        findHull(set, a, set[index], -getSide(a, set[index], b), hull);
-        findHull(set, set[index], b, -getSide(set[index], b, a), hull);
-    };
-
-    const minPoint = points.reduce((min, p) => (p.x < min.x ? p : min), points[0]);
-    const maxPoint = points.reduce((max, p) => (p.x > max.x ? p : max), points[0]);
-
-    const leftSet = points.filter(p => getSide(minPoint, maxPoint, p) > 0);
-    const rightSet = points.filter(p => getSide(minPoint, maxPoint, p) < 0);
-
-    const hull: Point[] = [minPoint];
-    findHull(leftSet, minPoint, maxPoint, 1, hull);
-    findHull(rightSet, maxPoint, minPoint, 1, hull);
-
-    return hull;
-}
-
 // https://www.geeksforgeeks.org/dsa/quickhull-algorithm-convex-hull/
 // JavaScript program to implement Quick Hull algorithm
 // to find convex hull.
@@ -72,7 +29,7 @@ function lineDist(p1, p2, p)
 
 // End points of line L are p1 and p2. side can have value
 // 1 or -1 specifying each of the parts made by the line L
-function quickHull(hull, a, n, p1, p2, side)
+function _quickHull(hull, a, n, p1, p2, side)
 {
     let ind = -1;
     let max_dist = 0;
@@ -99,11 +56,11 @@ function quickHull(hull, a, n, p1, p2, side)
     }
 
     // Recur for the two parts divided by a[ind]
-    quickHull(hull, a, n, a[ind], p1, -findSide(a[ind], p1, p2));
-    quickHull(hull, a, n, a[ind], p2, -findSide(a[ind], p2, p1));
+    _quickHull(hull, a, n, a[ind], p1, -findSide(a[ind], p1, p2));
+    _quickHull(hull, a, n, a[ind], p2, -findSide(a[ind], p2, p1));
 }
 
-export function quickHull3(points: number[][]): number[][]
+export function quickHull(points: number[][]): number[][]
 {   const n = points.length;
 
     // Stores the result (points of convex hull)
@@ -130,12 +87,12 @@ export function quickHull3(points: number[][]): number[][]
     // Recursively find convex hull points on
     // one side of line joining a[min_x] and
     // a[max_x]
-    quickHull(hull, points, n, points[min_x], points[max_x], 1);
+    _quickHull(hull, points, n, points[min_x], points[max_x], 1);
 
     // Recursively find convex hull points on
     // other side of line joining a[min_x] and
     // a[max_x]
-    quickHull(hull, points, n, points[min_x], points[max_x], -1);
+    _quickHull(hull, points, n, points[min_x], points[max_x], -1);
 
     // console.log("The points in Convex Hull are:");
     

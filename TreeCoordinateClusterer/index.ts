@@ -5,7 +5,7 @@ import * as process from 'process';
 import { getDistance } from 'geolib';
 
 import { groupBy } from './groupBy';
-import { Point, quickHull2, quickHull3 } from './quickhull';
+import { quickHull } from './quickhull';
 
 
 interface GeoItem {
@@ -16,30 +16,6 @@ interface GeoItem {
   latitude: number;
   longitude: number;
 }
-
-// const samplePoints = [
-//     [4.38982636755271,52.04616984897392],
-//     [4.389986894883828,52.0461622196863],
-//     [4.389900444595737,52.04611654424774],
-//     [4.389984693131365,52.04626107647968],
-//     [4.389752490539375,52.04621416667192],
-//     [4.389910816122934,52.04630539427641],
-//     [4.38976486350936,52.04631314690405],
-//     [4.390058770138237,52.04620777165455],
-//     [4.389836738778208,52.0463586990068],
-//     [4.389678413158496,52.046267471303366]
-// ];
-// // own implementation but the sorting of the coordinates is a bit tricky...
-// const hullOfPolygon = quickHull3(samplePoints);
-// const sorted = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})));
-// console.log(`sorted: ${JSON.stringify(sorted)}`)
-// sorted.push(sorted[0]); // to close the loop
-// console.log(`POLYGON((${sorted.map((i) => `${i.x} ${i.y}`).join(', ')}))`);
-
-
-
-
-
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -52,10 +28,6 @@ const rawData = fs.readFileSync(filePath, 'utf-8');
 const data: GeoItem[] = JSON.parse(rawData);
 const result = groupTreesByKindAndCluster(data);
 
-// // console.log('results: ');
-// // result.forEach((clustersOfTreeKind => {
-// //     console.log(`tree kind = "${clustersOfTreeKind.kind}", clusters #=${clustersOfTreeKind.clusters.length}`)
-// // }));
 console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
 
 
@@ -86,45 +58,6 @@ function sorted_points(points: Array<{x: number, y: number}>): Array<{x: number,
     });
     return points;
 }
-
-function sortCoordinatesIntoLinkedOuterPerimeterOfHull(input: number[][]): number[][] {
-    const sortedListOfCoordinates = new Array<number[]>();
-
-    let currentCoordinate: number[] = input.pop() as number[];
-    if(currentCoordinate !== undefined){
-        sortedListOfCoordinates.push(currentCoordinate);
-
-        while(input.length > 0) {
-            console.log(`found coordinate "${currentCoordinate[0]} ${currentCoordinate[1]}"`)
-            // find the next element that is closest to the currentElement so it can become the next currentelement
-            const sortedDistanceToOtherCoordinates = input
-                .map((coordinate, idx) => ({
-                    originalIndex: idx,
-                    distanceToCurrentCoordinate: getDistance(
-                        {latitude: currentCoordinate[0], longitude: currentCoordinate[1]},
-                        {latitude: coordinate[0], longitude: coordinate[1]}
-                    )
-                }))
-                .sort((a, b) => a.distanceToCurrentCoordinate - b.distanceToCurrentCoordinate);
-            
-            console.log('distances sorted: ' + JSON.stringify(sortedDistanceToOtherCoordinates, null, ' '));
-
-
-            currentCoordinate = input[sortedDistanceToOtherCoordinates[0].originalIndex];
-            console.log(`found next coordinate "${currentCoordinate[0]} ${currentCoordinate[1]}" (distance to previous=${sortedDistanceToOtherCoordinates[0].distanceToCurrentCoordinate}m)`)
-            
-            if(currentCoordinate === undefined) 
-                throw new Error('what happened');
-
-            // remove the new currentCoordinate from the original input array
-            input.splice(sortedDistanceToOtherCoordinates[0].originalIndex, 1);
-            // add it to the sortedListOfCoordinates
-            sortedListOfCoordinates.push(currentCoordinate);
-        }        
-    }
-    return sortedListOfCoordinates;
-}
-
 interface outputType {
     title: string;
     body: string;
@@ -224,7 +157,7 @@ function toWKT(cluster: {latitude: number, longitude: number}[]): string {
     return `LINESTRING(${coords.map(c => `${c}`).join(', ')})`;
   } else {
     // find the outside of the polygon using quickHull algorithm
-    const hullOfPolygon = quickHull3(cluster.map((coord) => ([coord.longitude, coord.latitude])));
+    const hullOfPolygon = quickHull(cluster.map((coord) => ([coord.longitude, coord.latitude])));
     const sortedPointsOfPolygon = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})));
     sortedPointsOfPolygon.push(sortedPointsOfPolygon[0]); // to close the loop in the polygon
     return `POLYGON((${sortedPointsOfPolygon.map((i) => `${i.x} ${i.y}`).join(', ')}))`;
