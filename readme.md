@@ -100,3 +100,7 @@ Agglomerative: Agglomerative: Agglomerative clustering, often referred to as a "
 
 - You can use this website to check WKT maps - https://wktmap.com/
 - types of features - https://mapscaping.com/a-guide-to-wkt-in-gis/
+
+## quickhull to render polygon
+
+based on https://www.geeksforgeeks.org/dsa/quickhull-algorithm-convex-hull/

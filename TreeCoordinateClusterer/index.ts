@@ -1,9 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as process from 'process';
+
 import { getDistance } from 'geolib';
+import { quickHull } from "@derschmale/tympanum";
 
 import { groupBy } from './groupBy';
+import { Point, quickHull2, quickHull3 } from './quickhull';
+
 
 interface GeoItem {
   title: string;
@@ -19,17 +23,87 @@ if (args.length === 0) {
     console.error('Please provide a path to a JSON file.');
     process.exit(1);
 }
-const filePath = path.resolve(args[0]);
-const rawData = fs.readFileSync(filePath, 'utf-8');
 
-const data: GeoItem[] = JSON.parse(rawData);
-const result = groupTreesByKindAndCluster(data);
 
-// console.log('results: ');
-// result.forEach((clustersOfTreeKind => {
-//     console.log(`tree kind = "${clustersOfTreeKind.kind}", clusters #=${clustersOfTreeKind.clusters.length}`)
-// }));
-console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
+// own implementation but the sorting of the coordinates is a bit tricky...
+const hullOfPolygon = quickHull3([
+    [4.38982636755271,52.04616984897392],
+    [4.389986894883828,52.0461622196863],
+    [4.389900444595737,52.04611654424774],
+    [4.389984693131365,52.04626107647968],
+    [4.389752490539375,52.04621416667192],
+    [4.389910816122934,52.04630539427641],
+    [4.38976486350936,52.04631314690405],
+    [4.390058770138237,52.04620777165455],
+    [4.389836738778208,52.0463586990068],
+    [4.389678413158496,52.046267471303366]
+]);
+//console.log(JSON.stringify(hullOfPolygon));
+// sort the coordinates, every time we need the next element that is closest to the previous element
+
+const sorted = sortCoordinatesIntoLinkedOuterPerimeterOfHull(hullOfPolygon);
+console.log('SORTED => ' + JSON.stringify(sorted));
+sorted.push(sorted[0]);
+
+
+console.log(`POLYGON((${sorted.map((i, idx) => `${i[0]} ${i[1]}`).join(', ')}))`);
+// console.log(`POLYGON(${result.concat(result[0]).map(i => `${i[0]} ${i[1]}`).join(', ')})`);
+
+
+
+
+function sortCoordinatesIntoLinkedOuterPerimeterOfHull(input: number[][]): number[][] {
+    const sortedListOfCoordinates = new Array<number[]>();
+
+    let currentCoordinate: number[] = input.pop() as number[];
+    if(currentCoordinate !== undefined){
+        sortedListOfCoordinates.push(currentCoordinate);
+
+        while(input.length > 0) {
+            console.log(`found coordinate "${currentCoordinate[0]} ${currentCoordinate[1]}"`)
+            // find the next element that is closest to the currentElement so it can become the next currentelement
+            const sortedDistanceToOtherCoordinates = input
+                .map((coordinate, idx) => ({
+                    originalIndex: idx,
+                    distanceToCurrentCoordinate: getDistance(
+                        {latitude: currentCoordinate[0], longitude: currentCoordinate[1]},
+                        {latitude: coordinate[0], longitude: coordinate[1]}
+                    )
+                }))
+                .sort((a, b) => a.distanceToCurrentCoordinate - b.distanceToCurrentCoordinate);
+            
+            console.log('distances sorted: ' + JSON.stringify(sortedDistanceToOtherCoordinates, null, ' '));
+
+
+            currentCoordinate = input[sortedDistanceToOtherCoordinates[0].originalIndex];
+            console.log(`found next coordinate "${currentCoordinate[0]} ${currentCoordinate[1]}" (distance to previous=${sortedDistanceToOtherCoordinates[0].distanceToCurrentCoordinate}m)`)
+            
+            if(currentCoordinate === undefined) 
+                throw new Error('what happened');
+
+            // remove the new currentCoordinate from the original input array
+            input.splice(sortedDistanceToOtherCoordinates[0].originalIndex, 1);
+            // add it to the sortedListOfCoordinates
+            sortedListOfCoordinates.push(currentCoordinate);
+        }        
+    }
+    return sortedListOfCoordinates;
+}
+
+
+
+
+// const filePath = path.resolve(args[0]);
+// const rawData = fs.readFileSync(filePath, 'utf-8');
+
+// const data: GeoItem[] = JSON.parse(rawData);
+// const result = groupTreesByKindAndCluster(data);
+
+// // console.log('results: ');
+// // result.forEach((clustersOfTreeKind => {
+// //     console.log(`tree kind = "${clustersOfTreeKind.kind}", clusters #=${clustersOfTreeKind.clusters.length}`)
+// // }));
+// console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
 
 
 interface outputType {
@@ -118,8 +192,11 @@ function groupTreesByKindAndCluster(items: GeoItem[]): Array<{ treeKind: GeoItem
     return result;
 }
 
+// POLYGON((a),(b),(c),(a)) = shape
+// we only need the outermost coordinates to form the shape.
 
-function toWKT(cluster: GeoItem[]): string {
+
+function toWKT(cluster: {latitude: number, longitude: number}[]): string {
   const coords = cluster.map(p => `${p.longitude} ${p.latitude}`);
   if (coords.length === 1) {
     return `POINT(${coords[0]})`;
@@ -127,6 +204,18 @@ function toWKT(cluster: GeoItem[]): string {
   else if (coords.length === 2) {
     return `LINESTRING(${coords.map(c => `${c}`).join(', ')})`;
   } else {
+    // find the outside of the polygon using quickHull algorithm
+    // const points = cluster.map(i => [i.latitude, i.longitude]);
+    // const hull = quickHull(points);
+    // const firstFacet = hull[0]; // needed to join to the list
+    // firstFacet.verts[]
+    // hull.concat(firstFacet).map(facet => `${facet.ridges[0].}`)
+
+    // hull.map(facet => )
+
+
+
+
     return `MULTIPOINT(${coords.map(c => `${c}`).join(', ')})`;
     // return `POLYGON(${coords.map(c => `(${c})`).join(', ')})`;
     // return `GEOMETRYCOLLECTION(${coords.map(c => `POINT(${c})`).join(', ')})`;
