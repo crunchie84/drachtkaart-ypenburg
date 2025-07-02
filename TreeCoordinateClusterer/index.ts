@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as process from 'process';
 
 import { getDistance } from 'geolib';
-import { quickHull } from "@derschmale/tympanum";
 
 import { groupBy } from './groupBy';
 import { Point, quickHull2, quickHull3 } from './quickhull';
@@ -18,39 +17,75 @@ interface GeoItem {
   longitude: number;
 }
 
+// const samplePoints = [
+//     [4.38982636755271,52.04616984897392],
+//     [4.389986894883828,52.0461622196863],
+//     [4.389900444595737,52.04611654424774],
+//     [4.389984693131365,52.04626107647968],
+//     [4.389752490539375,52.04621416667192],
+//     [4.389910816122934,52.04630539427641],
+//     [4.38976486350936,52.04631314690405],
+//     [4.390058770138237,52.04620777165455],
+//     [4.389836738778208,52.0463586990068],
+//     [4.389678413158496,52.046267471303366]
+// ];
+// // own implementation but the sorting of the coordinates is a bit tricky...
+// const hullOfPolygon = quickHull3(samplePoints);
+// const sorted = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})));
+// console.log(`sorted: ${JSON.stringify(sorted)}`)
+// sorted.push(sorted[0]); // to close the loop
+// console.log(`POLYGON((${sorted.map((i) => `${i.x} ${i.y}`).join(', ')}))`);
+
+
+
+
+
+
 const args = process.argv.slice(2);
 if (args.length === 0) {
     console.error('Please provide a path to a JSON file.');
     process.exit(1);
 }
+const filePath = path.resolve(args[0]);
+const rawData = fs.readFileSync(filePath, 'utf-8');
+
+const data: GeoItem[] = JSON.parse(rawData);
+const result = groupTreesByKindAndCluster(data);
+
+// // console.log('results: ');
+// // result.forEach((clustersOfTreeKind => {
+// //     console.log(`tree kind = "${clustersOfTreeKind.kind}", clusters #=${clustersOfTreeKind.clusters.length}`)
+// // }));
+console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
 
 
-// own implementation but the sorting of the coordinates is a bit tricky...
-const hullOfPolygon = quickHull3([
-    [4.38982636755271,52.04616984897392],
-    [4.389986894883828,52.0461622196863],
-    [4.389900444595737,52.04611654424774],
-    [4.389984693131365,52.04626107647968],
-    [4.389752490539375,52.04621416667192],
-    [4.389910816122934,52.04630539427641],
-    [4.38976486350936,52.04631314690405],
-    [4.390058770138237,52.04620777165455],
-    [4.389836738778208,52.0463586990068],
-    [4.389678413158496,52.046267471303366]
-]);
-//console.log(JSON.stringify(hullOfPolygon));
-// sort the coordinates, every time we need the next element that is closest to the previous element
+// code from https://stackoverflow.com/a/2859695/106909
+function sorted_points(points: Array<{x: number, y: number}>): Array<{x: number, y: number}> {
+    points = points.slice(0); // copy the array, since sort() modifies it
+    const stringify_point = function(p) { return p.x + ',' + p.y; };
 
-const sorted = sortCoordinatesIntoLinkedOuterPerimeterOfHull(hullOfPolygon);
-console.log('SORTED => ' + JSON.stringify(sorted));
-sorted.push(sorted[0]);
+    // finds a point in the interior of `pts`
+    const avg_points = function(pts) {
+        let x = 0;
+        let y = 0;
+        for (let i = 0; i < pts.length; i++) {
+            x += pts[i].x;
+            y += pts[i].y;
+        }
+        return {x: x/pts.length, y:y/pts.length};
+    }
+    const center = avg_points(points);
 
-
-console.log(`POLYGON((${sorted.map((i, idx) => `${i[0]} ${i[1]}`).join(', ')}))`);
-// console.log(`POLYGON(${result.concat(result[0]).map(i => `${i[0]} ${i[1]}`).join(', ')})`);
-
-
-
+    // calculate the angle between each point and the centerpoint, and sort by those angles
+    const angles = {};
+    for(let i = 0; i < points.length; i++) {
+        angles[stringify_point(points[i])] = Math.atan2(points[i].x - center.x, points[i].y - center.y);
+    }
+    points.sort(function(p1, p2) {
+        return angles[stringify_point(p1)] - angles[stringify_point(p2)];
+    });
+    return points;
+}
 
 function sortCoordinatesIntoLinkedOuterPerimeterOfHull(input: number[][]): number[][] {
     const sortedListOfCoordinates = new Array<number[]>();
@@ -89,22 +124,6 @@ function sortCoordinatesIntoLinkedOuterPerimeterOfHull(input: number[][]): numbe
     }
     return sortedListOfCoordinates;
 }
-
-
-
-
-// const filePath = path.resolve(args[0]);
-// const rawData = fs.readFileSync(filePath, 'utf-8');
-
-// const data: GeoItem[] = JSON.parse(rawData);
-// const result = groupTreesByKindAndCluster(data);
-
-// // console.log('results: ');
-// // result.forEach((clustersOfTreeKind => {
-// //     console.log(`tree kind = "${clustersOfTreeKind.kind}", clusters #=${clustersOfTreeKind.clusters.length}`)
-// // }));
-// console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
-
 
 interface outputType {
     title: string;
@@ -201,22 +220,15 @@ function toWKT(cluster: {latitude: number, longitude: number}[]): string {
   if (coords.length === 1) {
     return `POINT(${coords[0]})`;
   }
-  else if (coords.length === 2) {
+  else if (coords.length <=3) {
     return `LINESTRING(${coords.map(c => `${c}`).join(', ')})`;
   } else {
     // find the outside of the polygon using quickHull algorithm
-    // const points = cluster.map(i => [i.latitude, i.longitude]);
-    // const hull = quickHull(points);
-    // const firstFacet = hull[0]; // needed to join to the list
-    // firstFacet.verts[]
-    // hull.concat(firstFacet).map(facet => `${facet.ridges[0].}`)
-
-    // hull.map(facet => )
-
-
-
-
-    return `MULTIPOINT(${coords.map(c => `${c}`).join(', ')})`;
+    const hullOfPolygon = quickHull3(cluster.map((coord) => ([coord.longitude, coord.latitude])));
+    const sortedPointsOfPolygon = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})));
+    sortedPointsOfPolygon.push(sortedPointsOfPolygon[0]); // to close the loop in the polygon
+    return `POLYGON((${sortedPointsOfPolygon.map((i) => `${i.x} ${i.y}`).join(', ')}))`;
+    // return `MULTIPOINT(${coords.map(c => `${c}`).join(', ')})`;
     // return `POLYGON(${coords.map(c => `(${c})`).join(', ')})`;
     // return `GEOMETRYCOLLECTION(${coords.map(c => `POINT(${c})`).join(', ')})`;
   }
