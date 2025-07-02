@@ -186,6 +186,11 @@ jq 'map({
     body: .body
 })' tmp/merged-output-filtered-pollen.json > tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json
 
+# cluster trees into shapes / WKT format
+ts-node TreeCoordinateClusterer/index.ts tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json > tmp/clustered-trees-shapes.json
+jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/clustered-trees-shapes.json > output/map-clustered-trees-shapes.csv
+
+
 #
 # OUTPUT TO FINAL FILES // CHUNKING
 #
