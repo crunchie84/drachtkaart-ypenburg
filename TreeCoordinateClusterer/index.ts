@@ -32,6 +32,7 @@ console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
 
 
 // code from https://stackoverflow.com/a/2859695/106909
+// given a list of [x,y] order these to create a circulair outline
 function sorted_points(points: Array<{x: number, y: number}>): Array<{x: number, y: number}> {
     points = points.slice(0); // copy the array, since sort() modifies it
     const stringify_point = function(p) { return p.x + ',' + p.y; };
@@ -58,6 +59,7 @@ function sorted_points(points: Array<{x: number, y: number}>): Array<{x: number,
     });
     return points;
 }
+
 interface outputType {
     title: string;
     body: string;
@@ -91,7 +93,6 @@ function toOutputObjectArray(clusteredTrees: clusteredTreesPerKind): outputType[
     }, new Array<outputType>());
 }
 
-
 function findNearbyCoordinatesRecursive(coordinateToSearchFrom: GeoItem, allCoordinates: GeoItem[], maxDistanceItemsInGroupInMeters: number, isDebugMode: boolean): GeoItem[] {
     // find all coordinates which are in reach of our current coordinate
     const nearbyCoordinates = allCoordinates.filter((currentCoordinate) => {
@@ -123,11 +124,7 @@ function findNearbyCoordinatesRecursive(coordinateToSearchFrom: GeoItem, allCoor
     return result;
 }
 
-
 function groupCoordinatesIntoClusters(items: GeoItem[], maxDistanceItemsInGroupInMeters: number): GeoItem[][] {
-    //assertion
-    const coordinatesStartedWith = items.length;
-
     const clusters = new Array<GeoItem[]>();
     const source = [...items];
     let isDebugMode = false;
@@ -146,53 +143,7 @@ function groupCoordinatesIntoClusters(items: GeoItem[], maxDistanceItemsInGroupI
         }
     }
 
-    const coordinatesCountEndedWith = clusters.reduce((count, currentcluster) => count + currentcluster.length, 0);
-    if (coordinatesStartedWith != coordinatesCountEndedWith) {
-        throw new Error(`Clustering fail! We started with #${coordinatesStartedWith} coordinates, after clustering we ended with #${coordinatesCountEndedWith} coordinates`);
-    }
-
     return clusters;
-
-    // very naive implementation
-    // const clustersOfCoordinatesNearEnough = items.reduce((clusters, currentCoordinate) => {
-    //     // for each item in the group, 
-    //     // find a cluster where we can find an item with a min_distance_to = xxMeters
-    //     // if found add the tree to that cluster
-    //     // else create a new cluster
-        
-    //     // TODO FIX BUG
-    //     // when one cluster is created with a coordinate top left
-    //     // and a second coordinate is evalauted which is bottom right they are not near enough, et ergo they are not put in the same cluster
-    //     // but when the middle coordinate is found they are clustered.
-    //     // instead we need to be greedy and start at a random coordinate and keep adding coordinates to the cluster until we can no longer find a tree which is near enough
-    //     // then re-iterate the above till we have no more coordinates to process
-
-
-
-    //     const clusterToAddItemTo = clusters.find((clusterOfCoordinates) => {
-    //         // find a cluster where we already have a tree with min_distance_to=5m
-    //         return clusterOfCoordinates.some((coordinateInCluster) => {
-    //             // console.log(`going to test distance between (${currentCoordinate.latitude} ${currentCoordinate.longitude}) and (${coordinateInCluster.latitude} ${coordinateInCluster.longitude})`);
-
-    //             // getDistance Distance values are always floats and represent the distance in meters.
-    //             return getDistance(
-    //                 { latitude: currentCoordinate.latitude, longitude: currentCoordinate.longitude },
-    //                 { latitude: coordinateInCluster.latitude, longitude: coordinateInCluster.longitude }
-    //             ) < maxDistanceItemsInGroupInMeters
-    //         })
-    //     }) || [];
-
-    //     if (clusterToAddItemTo.length === 0) {
-    //         // console.log('- Creating new cluster, could not find any where trees are < 5m apart');
-    //         clusters.push(clusterToAddItemTo);
-    //     }
-
-    //     clusterToAddItemTo.push(currentCoordinate);//add the tree to the cluster
-
-    //     return clusters;
-    // }, new Array<GeoItem[]>());
-
-    // return clustersOfCoordinatesNearEnough;
 }
 
 function groupTreesByKindAndCluster(items: GeoItem[]): Array<{ treeKind: GeoItem, clusters: GeoItem[][]}> {
@@ -216,7 +167,6 @@ function groupTreesByKindAndCluster(items: GeoItem[]): Array<{ treeKind: GeoItem
 
 // POLYGON((a),(b),(c),(a)) = shape
 // we only need the outermost coordinates to form the shape.
-
 
 function toWKT(cluster: {latitude: number, longitude: number}[]): string {
   const coords = cluster.map(p => `${p.longitude} ${p.latitude}`);
