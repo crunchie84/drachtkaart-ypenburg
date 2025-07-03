@@ -61,6 +61,8 @@ jq 'map({
   coordinateRD: "\(.X) \(.Y)",
   Pollenwaarde: .Pollenwaarde,
   Nectarwaarde: .Nectarwaarde,
+  StartBloei: .SB,
+  EindeBloei: .EB,
   title: "\(.["Soortnaam Nederlands"]) (\(.Soortnaam))",
   body: "Nectarwaarde: \(.Nectarwaarde) , Pollenwaarde: \(.Pollenwaarde), Bloeit van \(.SB) t/m \(.EB)",
 })' tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched.json > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched_Prep4Export.json
@@ -104,6 +106,8 @@ jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
 # transform the list to the output format we need for google maps
 jq 'map({
   coordinateRD: "\(.geometry.coordinates[0]) \(.geometry.coordinates[1])",
+  StartBloei: .properties.SB,
+  EindeBloei: .properties.EB,
   Pollenwaarde: .properties.Pollenwaarde,
   Nectarwaarde: .properties.Nectarwaarde,
   title: "\(.properties.BOOMSOORT_NEDERLANDS) (\(.properties.BOOMSOORT_WETENSCHAPPELIJ))",
@@ -160,6 +164,8 @@ jq 'map({
     longitude: .lon,
     Pollenwaarde: .tags.Pollenwaarde,
     Nectarwaarde: .tags.Nectarwaarde,
+    StartBloei: .tags.SB,
+    EindeBloei: .tags.EB,
     title: "\(.tags.BOOMSOORT_NEDERLANDS) (\(.tags.species))",
     body: "Nectarwaarde: \(.tags.Nectarwaarde), Pollenwaarde: \(.tags.Pollenwaarde), Bloeit van \(.tags.SB) t/m \(.tags.EB)" 
     })' tmp/filtered-only-drachtplanten-local-trees-delft-enriched.json > tmp/output-delft-trees-formatted.json
@@ -182,6 +188,8 @@ jq 'map({
     longitude: .longitude,
     Pollenwaarde: .Pollenwaarde,
     Nectarwaarde: .Nectarwaarde,
+    StartBloei: .SB,
+    EindeBloei: .EB,
     title: .title,
     body: .body
 })' tmp/merged-output-filtered-pollen.json > tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json

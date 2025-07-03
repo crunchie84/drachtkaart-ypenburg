@@ -11,8 +11,10 @@ import { quickHull } from './quickhull';
 interface GeoItem {
   title: string;
   body: string;
-  Pollenwaarde: string;
-  Nectarwaarde: string;
+  Pollenwaarde: number;
+  Nectarwaarde: number;
+  StartBloei: number;
+  EindeBloei: number;
   latitude: number;
   longitude: number;
 }
@@ -64,9 +66,11 @@ function sorted_points(points: Array<{x: number, y: number}>): Array<{x: number,
 interface outputType {
     title: string;
     body: string;
-    Pollenwaarde: string;
-    Nectarwaarde: string;
+    Pollenwaarde: number;
+    Nectarwaarde: number;
     AantalBomen: number;
+    StartBloei: number;
+    EindeBloei: number;
     WKT: string;
     DebugInfo: string;
 }
@@ -83,6 +87,8 @@ function toOutputObjectArray(clusteredTrees: clusteredTreesPerKind): outputType[
             body: treeKind.body,
             Pollenwaarde: treeKind.Pollenwaarde,
             Nectarwaarde: treeKind.Nectarwaarde,
+            StartBloei: treeKind.StartBloei,
+            EindeBloei: treeKind.EindeBloei,
         };
 
         clusters.forEach(cluster => {
