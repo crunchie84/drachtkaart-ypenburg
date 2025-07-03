@@ -26,7 +26,8 @@ const filePath = path.resolve(args[0]);
 const rawData = fs.readFileSync(filePath, 'utf-8');
 
 const data: GeoItem[] = JSON.parse(rawData);
-const result = groupTreesByKindAndCluster(data);
+const maxDistanceToOtherTreesInMeters = 100;//crossings/roads in NL seem to be 30m spacing of trees
+const result = groupTreesByKindAndCluster(data, maxDistanceToOtherTreesInMeters);
 
 console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
 
@@ -65,7 +66,9 @@ interface outputType {
     body: string;
     Pollenwaarde: string;
     Nectarwaarde: string;
+    AantalBomen: number;
     WKT: string;
+    DebugInfo: string;
 }
 
 type clusteredTreesPerKind = Array<{ treeKind: GeoItem, clusters: GeoItem[][]}>;
@@ -86,7 +89,9 @@ function toOutputObjectArray(clusteredTrees: clusteredTreesPerKind): outputType[
             const clustersSerialized2WKT = toWKT(cluster);
             acc.push({
                 ...metadata,
-                WKT: clustersSerialized2WKT
+                WKT: clustersSerialized2WKT,
+                AantalBomen: cluster.length,
+                DebugInfo: JSON.stringify(cluster.map(i => `${i.latitude} ${i.longitude}`))
             });
         });
         return acc;
@@ -146,13 +151,12 @@ function groupCoordinatesIntoClusters(items: GeoItem[], maxDistanceItemsInGroupI
     return clusters;
 }
 
-function groupTreesByKindAndCluster(items: GeoItem[]): Array<{ treeKind: GeoItem, clusters: GeoItem[][]}> {
+function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInMeters: number): Array<{ treeKind: GeoItem, clusters: GeoItem[][]}> {
     // group all GeoItems based on SoortNaam
     const groupedData = groupBy(items, (i => i.title));
 
     const result = groupedData.map((groupedTrees) => {
         const soort = groupedTrees.key;
-        const maxDistanceToOtherTreesInMeters = 15;
 
         const clustersOfTreeKind = groupCoordinatesIntoClusters(groupedTrees.items, maxDistanceToOtherTreesInMeters);
 
@@ -174,7 +178,9 @@ function toWKT(cluster: {latitude: number, longitude: number}[]): string {
     return `POINT(${coords[0]})`;
   }
   else if (coords.length <=3) {
-    return `LINESTRING(${coords.map(c => `${c}`).join(', ')})`;
+    // return `LINESTRING(${coords.map(c => `${c}`).join(', ')})`;
+    return `MULTIPOINT(${coords.map(c => `${c}`).join(', ')})`;
+    // TODO; how to inflate LINESTRING into an AREA?
   } else {
     // find the outside of the polygon using quickHull algorithm
     const hullOfPolygon = quickHull(cluster.map((coord) => ([coord.longitude, coord.latitude])));
