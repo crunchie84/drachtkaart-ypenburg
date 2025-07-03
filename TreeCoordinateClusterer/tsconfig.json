@@ -5,7 +5,6 @@
       "moduleResolution": "node",
       // "esModuleInterop": true,
       // "allowJs": true,
-      "moduleSuffixes": [".module", ".ios", ".native", ""],
       "outDir": "dist",
       "sourceMap": false,
       "baseUrl": ".",
