@@ -2,22 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as process from 'process';
 
-import { getDistance } from 'geolib';
+import { getDistance, longitudeKeys } from 'geolib';
 
 import { groupBy } from './groupBy';
 import { quickHull } from './quickhull';
-
-
-interface GeoItem {
-  title: string;
-  body: string;
-  Pollenwaarde: number;
-  Nectarwaarde: number;
-  StartBloei: number;
-  EindeBloei: number;
-  latitude: number;
-  longitude: number;
-}
+import { GeoItem } from './types';
+import { clusterTreesWithoutOverlappingOtherClusters } from './clusterCoordinates';
+import { sorted_points } from './sortCoordinatesOfPolygon';
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -31,37 +22,7 @@ const data: GeoItem[] = JSON.parse(rawData);
 const maxDistanceToOtherTreesInMeters = 100;//crossings/roads in NL seem to be 30m spacing of trees
 const result = groupTreesByKindAndCluster(data, maxDistanceToOtherTreesInMeters);
 
-console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
-
-
-// code from https://stackoverflow.com/a/2859695/106909
-// given a list of [x,y] order these to create a circulair outline
-function sorted_points(points: Array<{x: number, y: number}>): Array<{x: number, y: number}> {
-    points = points.slice(0); // copy the array, since sort() modifies it
-    const stringify_point = function(p) { return p.x + ',' + p.y; };
-
-    // finds a point in the interior of `pts`
-    const avg_points = function(pts) {
-        let x = 0;
-        let y = 0;
-        for (let i = 0; i < pts.length; i++) {
-            x += pts[i].x;
-            y += pts[i].y;
-        }
-        return {x: x/pts.length, y:y/pts.length};
-    }
-    const center = avg_points(points);
-
-    // calculate the angle between each point and the centerpoint, and sort by those angles
-    const angles = {};
-    for(let i = 0; i < points.length; i++) {
-        angles[stringify_point(points[i])] = Math.atan2(points[i].x - center.x, points[i].y - center.y);
-    }
-    points.sort(function(p1, p2) {
-        return angles[stringify_point(p1)] - angles[stringify_point(p2)];
-    });
-    return points;
-}
+console.log(JSON.stringify(toOutputObjectArray(result).map(i => i.WKT), undefined, '  '));
 
 interface outputType {
     title: string;
@@ -157,14 +118,24 @@ function groupCoordinatesIntoClusters(items: GeoItem[], maxDistanceItemsInGroupI
     return clusters;
 }
 
+
 function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInMeters: number): Array<{ treeKind: GeoItem, clusters: GeoItem[][]}> {
     // group all GeoItems based on SoortNaam
     const groupedData = groupBy(items, (i => i.title));
 
-    const result = groupedData.map((groupedTrees) => {
+    // debug info
+    const treeKindsCount = groupedData.length;
+    let treeKindsDone = 0;
+
+    const result = groupedData
+.filter(grp => grp.key === "Krimlinde (Tilia x europaea)")
+// .filter(grp => grp.key === "Spaanse aak / Veldesdoorn (Acer campestre)")
+    .map((groupedTrees) => {
+        console.log(`clustering tree kind ${treeKindsDone++}/${treeKindsCount} (containing #${groupedTrees.items.length} trees) - "${groupedTrees.key}"`)
         const soort = groupedTrees.key;
 
-        const clustersOfTreeKind = groupCoordinatesIntoClusters(groupedTrees.items, maxDistanceToOtherTreesInMeters);
+        //const clustersOfTreeKind = groupCoordinatesIntoClusters(groupedTrees.items, maxDistanceToOtherTreesInMeters);
+        const clustersOfTreeKind = clusterTreesWithoutOverlappingOtherClusters(groupedTrees.items, items, maxDistanceToOtherTreesInMeters);
 
         return {
             treeKind: items.find(i => i.title === soort) || {} as GeoItem, // cheats to fix the nullref typescript assumption
