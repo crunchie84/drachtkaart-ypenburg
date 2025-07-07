@@ -6,9 +6,15 @@ import { getDistance, longitudeKeys } from 'geolib';
 
 import { groupBy } from './groupBy';
 import { quickHull } from './quickhull';
-import { GeoItem } from './types';
-import { clusterTreesWithoutOverlappingOtherClusters } from './clusterCoordinates';
+import { GeoItem, distanceCache } from './types';
+import { calculateDistanceCache, clusterTreesWithoutOverlappingOtherClusters } from './clusterCoordinates';
 import { sorted_points } from './sortCoordinatesOfPolygon';
+
+const v8 = require('node:v8');
+const { heap_size_limit } = v8.getHeapStatistics();
+const heapSizeInGB = heap_size_limit / (1024 * 1024 * 1024);
+console.log(`${heapSizeInGB} GB`);
+
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -20,9 +26,14 @@ const rawData = fs.readFileSync(filePath, 'utf-8');
 
 const data: GeoItem[] = JSON.parse(rawData);
 const maxDistanceToOtherTreesInMeters = 100;//crossings/roads in NL seem to be 30m spacing of trees
-const result = groupTreesByKindAndCluster(data, maxDistanceToOtherTreesInMeters);
 
-console.log(JSON.stringify(toOutputObjectArray(result).map(i => i.WKT), undefined, '  '));
+//const distanceCache = calculateDistanceCache(data);
+const cache: distanceCache = undefined;
+
+console.log("going to group trees");
+const result = groupTreesByKindAndCluster(data, maxDistanceToOtherTreesInMeters, cache);
+
+console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
 
 interface outputType {
     title: string;
@@ -119,7 +130,7 @@ function groupCoordinatesIntoClusters(items: GeoItem[], maxDistanceItemsInGroupI
 }
 
 
-function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInMeters: number): Array<{ treeKind: GeoItem, clusters: GeoItem[][]}> {
+function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInMeters: number, distanceCache: distanceCache): Array<{ treeKind: GeoItem, clusters: GeoItem[][]}> {
     // group all GeoItems based on SoortNaam
     const groupedData = groupBy(items, (i => i.title));
 
@@ -128,14 +139,14 @@ function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInM
     let treeKindsDone = 0;
 
     const result = groupedData
-.filter(grp => grp.key === "Krimlinde (Tilia x europaea)")
+//.filter(grp => grp.key === "Krimlinde (Tilia x europaea)")
 // .filter(grp => grp.key === "Spaanse aak / Veldesdoorn (Acer campestre)")
     .map((groupedTrees) => {
         console.log(`clustering tree kind ${treeKindsDone++}/${treeKindsCount} (containing #${groupedTrees.items.length} trees) - "${groupedTrees.key}"`)
         const soort = groupedTrees.key;
 
         //const clustersOfTreeKind = groupCoordinatesIntoClusters(groupedTrees.items, maxDistanceToOtherTreesInMeters);
-        const clustersOfTreeKind = clusterTreesWithoutOverlappingOtherClusters(groupedTrees.items, items, maxDistanceToOtherTreesInMeters);
+        const clustersOfTreeKind = clusterTreesWithoutOverlappingOtherClusters(groupedTrees.items, items, maxDistanceToOtherTreesInMeters, distanceCache);
 
         return {
             treeKind: items.find(i => i.title === soort) || {} as GeoItem, // cheats to fix the nullref typescript assumption

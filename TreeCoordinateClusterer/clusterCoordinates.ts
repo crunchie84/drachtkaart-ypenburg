@@ -1,9 +1,9 @@
 import { getDistance, latitudeKeys } from "geolib";
 import { quickHull } from "./quickhull";
 import { sorted_points } from "./sortCoordinatesOfPolygon";
-import { Coordinate, GeoItem } from "./types";
+import { Coordinate, distanceCache, GeoItem } from "./types";
 
-export function clusterTreesWithoutOverlappingOtherClusters(currentItems: GeoItem[], allItems: GeoItem[], maxDistanceBetweenTreesInMeters: number): GeoItem[][]{
+export function clusterTreesWithoutOverlappingOtherClusters(currentItems: GeoItem[], allItems: GeoItem[], maxDistanceBetweenTreesInMeters: number, distanceCache: distanceCache): GeoItem[][]{
     //while currentItems has remaining items
     // create a new cluster using the first coordinate of the remaining Items
     // while succesfully added last coordinate to the new cluster
@@ -23,33 +23,62 @@ export function clusterTreesWithoutOverlappingOtherClusters(currentItems: GeoIte
     const clusters = new Array<GeoItem[]>();
     let remainingItems = currentItems;
     while(remainingItems.length > 0) {
-        const result = clusterItems(remainingItems, otherItems, maxDistanceBetweenTreesInMeters);
+        const result = clusterItems(remainingItems, otherItems, maxDistanceBetweenTreesInMeters, distanceCache);
         remainingItems = result.remainingItems;
         const nextCluster = result.clusteredItems;
         
-// console.log(`next cluster size=${nextCluster.length}, remainingItemsToCluster=${remainingItems.length}`)
+console.log(`next cluster size=${nextCluster.length}, remainingItemsToCluster=${remainingItems.length}`)
         clusters.push(nextCluster);
     }
     return clusters;
 }
 
-function calculateDistanceCache(allCoordinates: Coordinate[]): Array<{a:Coordinate,b:Coordinate, distanceInMeter:number }> {
-    // TODO
+function createDistanceCacheKey(a: Coordinate, b: Coordinate) {
+    // sort them always in the same way
+    return JSON.stringify([a.latitude, a.longitude,b.latitude, b.longitude].sort());
+}
+
+export function calculateDistanceCache(allCoordinates: Coordinate[]): distanceCache {
+console.log("calculating distance from all coordinates to all coordinates... sit tight, this will take a while....")
+const total = allCoordinates.length * allCoordinates.length;
+let i = 0;
+
+    const result: distanceCache = {};
+    allCoordinates.forEach((coord) => {
+        allCoordinates
+            .forEach((otherCoord) => {
+                i++;
+                if(i %100000 === 0) console.log(`${i}/${total}`)
+                const cacheKey = createDistanceCacheKey(coord, otherCoord);
+                if(result[cacheKey] === undefined){
+                    result[cacheKey] = getDistance(coord, otherCoord)
+                }
+            });
+    });
+console.log('cache calculated');
+    return result;
 }
 
 
-function sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(coordinatesOfCluster: GeoItem[], remainingNonClusteredItems: GeoItem[]){
-    // this is not optimized. We are re-doing the calculations over and over again for every coordinate vs every coordinate. Can we do this just once?
-
+function sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(coordinatesOfCluster: GeoItem[], remainingNonClusteredItems: GeoItem[], distanceCache: distanceCache){
     const sorted = remainingNonClusteredItems
             .map(candidateCoordinate => {
                 const closestDistanceToAnyOfOurCoordinates = coordinatesOfCluster
-                    .map(currentCoordinateOfCluster =>
-                        getDistance(
+                    .map(currentCoordinateOfCluster => {
+                        if(distanceCache !== undefined ){
+                            const cachekey = createDistanceCacheKey(currentCoordinateOfCluster, candidateCoordinate);
+                            if(distanceCache[cachekey] === undefined) {
+                                console.log(`cache miss!, adding to cache ${cachekey}`);
+                                distanceCache[cachekey] = getDistance(currentCoordinateOfCluster, candidateCoordinate);
+                            }
+                            return distanceCache[cachekey];
+                        }
+
+                        return getDistance(
                             { latitude: currentCoordinateOfCluster.latitude, longitude: currentCoordinateOfCluster.longitude },
                             { latitude: candidateCoordinate.latitude, longitude: candidateCoordinate.longitude }
                         )
-                    )
+                    })
                     .sort((a, b) => a - b)[0];
 
                 return {
@@ -116,7 +145,7 @@ function growingToCoordinateCreatesPolygonWitoutOverlapInOtherTypesOfCoordinate(
     return !polygonContainsCoordinateOfOtherType;
 }
 
-function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], maxDistanceBetweenTreesInMeters: number) : {remainingItems: GeoItem[], clusteredItems: GeoItem[]} {
+function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], maxDistanceBetweenTreesInMeters: number, distanceCache: distanceCache) : {remainingItems: GeoItem[], clusteredItems: GeoItem[]} {
     if(remainingItems.length === 0) {
         throw new Error('clustering can only be done with > 0 items to cluster');
     }
@@ -127,7 +156,7 @@ function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], m
     let clusterOptionsAreExhausted = false;
     while (remainingItems.length > 0 && clusterOptionsAreExhausted === false) {
         // sort the remaining items on closestdistance to _any_ of our coordinates
-        let remainingItemsSortedClosestToOurCurrentClusterCoordinates = sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(cluster, remainingItems);
+        let remainingItemsSortedClosestToOurCurrentClusterCoordinates = sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(cluster, remainingItems, distanceCache);
 
         // if we do not have a polygon yet (size = 3) then we use the max distance calculation between trees
         // to prevent arbitrary datapoints from forming a cluster across the map
