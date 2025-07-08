@@ -121,8 +121,8 @@ function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherTyp
 
     // assertion that we never flip the coordinates
     polygon.forEach(c => {
-        if(c.latitude < 50) {
-            throw new Error(`AssertionFailed: latitude for NL should be < 50, lon > 4 but we got: "${coordinateToString(c)}"`);
+        if(c.latitude <= 52  || c.latitude >= 53 || c.longitude <= 4 || c.longitude >= 5) {
+            throw new Error(`AssertionFailed: latitude for NL should be [50-53], lon[4-5] but we got: "${coordinateToString(c)}"`);
         }
     });
 
