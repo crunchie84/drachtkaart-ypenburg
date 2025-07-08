@@ -102,60 +102,6 @@ function toOutputObjectArray(clusteredTrees: clusteredTreesPerKind): outputType[
     }, new Array<outputType>());
 }
 
-function findNearbyCoordinatesRecursive(coordinateToSearchFrom: GeoItem, allCoordinates: GeoItem[], maxDistanceItemsInGroupInMeters: number, isDebugMode: boolean): GeoItem[] {
-    // find all coordinates which are in reach of our current coordinate
-    const nearbyCoordinates = allCoordinates.filter((currentCoordinate) => {
-            return (currentCoordinate.latitude != coordinateToSearchFrom.latitude && currentCoordinate.longitude != coordinateToSearchFrom.latitude)
-            && getDistance(
-                { latitude: coordinateToSearchFrom.latitude, longitude: coordinateToSearchFrom.longitude },
-                { latitude: currentCoordinate.latitude, longitude: currentCoordinate.longitude }
-            ) < maxDistanceItemsInGroupInMeters
-    });
-    if(isDebugMode){
-        console.log(`from ${coordinateToSearchFrom.latitude} ${coordinateToSearchFrom.longitude} found ${nearbyCoordinates.length} coordinates within distance: ${JSON.stringify(nearbyCoordinates.map(i => [i.latitude, i.longitude]))}`)
-    }
-
-    // remove them from the allCoordinates array to stop recursion in the future
-    // Note; we do this first so we don't get duplicates by going back-n-forth between two coordinates when iterating / recursing
-    nearbyCoordinates.forEach((coordinateToRemove) => {
-        const indexOfItemInSourceList = allCoordinates.indexOf(coordinateToRemove);
-        if(indexOfItemInSourceList < 0) throw new Error(`Assertion; item "${coordinateToRemove.latitude} ${coordinateToRemove.longitude}" came from source list so index should be found in source list`);
-        allCoordinates.splice(indexOfItemInSourceList, 1);
-    });
-
-    // for each we found, recurse to find more coordinates // or no-op when no more coordinates found
-    const result = new Array<GeoItem>();
-    nearbyCoordinates.forEach((coordinateToRecurseFrom) => {
-        result.push(coordinateToRecurseFrom);
-        const nearbyFromThisCoordinate = findNearbyCoordinatesRecursive(coordinateToRecurseFrom, allCoordinates, maxDistanceItemsInGroupInMeters, isDebugMode);
-        result.push(...nearbyFromThisCoordinate);
-    });
-    return result;
-}
-
-function groupCoordinatesIntoClusters(items: GeoItem[], maxDistanceItemsInGroupInMeters: number): GeoItem[][] {
-    const clusters = new Array<GeoItem[]>();
-    const source = [...items];
-    let isDebugMode = false;
-    // console.log(`clustering trees of kind ${items[0].title} - total coordinates to cluster=#${coordinatesStartedWith}`);
-    
-    while(source.length > 0) {
-        const currentCoordinateToStartClusterWith = source.pop();// take a remaining item
-        // isDebugMode = `${currentCoordinateToStartClusterWith.latitude} ${currentCoordinateToStartClusterWith.longitude}` === "52.0271616555834 4.37494089268015";
-
-        const cluster = [currentCoordinateToStartClusterWith].concat(findNearbyCoordinatesRecursive(currentCoordinateToStartClusterWith, source, maxDistanceItemsInGroupInMeters, isDebugMode));
-        clusters.push(cluster);
-
-        if(isDebugMode){
-            console.log(`- cluster done, seed="${currentCoordinateToStartClusterWith.latitude} ${currentCoordinateToStartClusterWith.longitude}", found total #${cluster.length} coordinates (${JSON.stringify(cluster.map(i => [i.latitude, i.longitude]))})`);
-            console.log(`- remaining coordinates to cluster: ${source.length}`);
-        }
-    }
-
-    return clusters;
-}
-
-
 function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInMeters: number): Array<{ treeKind: GeoItem, clusters: GeoItem[][]}> {
     // group all GeoItems based on SoortNaam
     const groupedData = groupBy(items, (i => i.title));
