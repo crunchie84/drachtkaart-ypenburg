@@ -6,9 +6,9 @@ Resultaten hier zichtbaar: [https://www.google.com/maps/d/u/0/edit?mid=1rEXjvP8r
 
 ## TODOs
 
-- [] Soms geeft de clustering overlap - dit kunnen we nog uitzoeken
-- [] Optimalisatie: enkel evalueren welke coordinaten in een cluster vallen obv de bouding box van de polygon
-- [] Manuele data toevoegen - drachtplanten zoals de Hedera of Japanse duizendknoop
+- [ ] Soms geeft de clustering overlap - dit kunnen we nog uitzoeken
+- [ ] Optimalisatie: enkel evalueren welke coordinaten in een cluster vallen obv de bouding box van de polygon
+- [ ] Manuele data toevoegen - drachtplanten zoals de Hedera of Japanse duizendknoop
 - [x] splitsen van de dracht informatie in meerdere lagen - lente / zomer / herfst zodat zichtbaar wordt wanneer er minder drachtaanbod beschikbaar is
 - [x] TODO clusteren bomen/shapes obv dichtbijheid van elkaar / grouperen shapes -> Vlakken van maken ? hoe dan? export in csv kan dat niet, KML?
 - [x] Data fouten in denhaag vinden - welke bomen zijn er uitgefilterd obv typo's die er hadden moeten zijn?
@@ -32,13 +32,12 @@ Resultaten hier zichtbaar: [https://www.google.com/maps/d/u/0/edit?mid=1rEXjvP8r
 	- only retian the name/nl name/x/y fields in the excel and export to csv
 	- `csvjson Bomenbestand-Nootdorp-20250701.csv | jq '.' > Bomenbestand-Nootdorp-20250701.json`
 	- find all the unique tree names to determine cleanup rules `jq '[.[] | .Soortnaam | select(length > 0)] | unique' Bomenbestand-Nootdorp-20250701.json > Bomenbestand-Nootdorp-Unique-Bomen.json`
-
+- Execute `./etl.sh`
+- upload the individual csv layers into google maps -> https://www.google.com/maps/d/u/0/edit?hl=en&mid=1rEXjvP8rAoK41iPF5tkkcRLcWMVaP8c&ll=52.04045530208437%2C4.372527826204968&z=15
 
 ## Den Haag Bomen Data
 
-
-https://denhaag.dataplatform.nl/#/data?autocomplete_field=(bomen)
-https://denhaag.dataplatform.nl/#/data/77879f91-3d48-47dd-b33d-9e86ae5d99de
+- Downloadable from - https://denhaag.dataplatform.nl/#/data?autocomplete_field=(bomen) // https://denhaag.dataplatform.nl/#/data/77879f91-3d48-47dd-b33d-9e86ae5d99de
 
 ```
 {
@@ -86,6 +85,10 @@ import the CSV with markers into google maps -> https://www.google.com/maps/d/u/
 and... profit!
 
 ![profit](experimental-result.png)
+
+## Pijnacker-Nootdorp
+
+- Data enkel via e-mail bij de gemeente te verkrijgen
 
 
 ## credits
