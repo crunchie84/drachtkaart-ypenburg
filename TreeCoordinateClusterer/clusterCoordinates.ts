@@ -1,4 +1,4 @@
-import { getDistance } from "geolib";
+import { getDistance, isPointInPolygon } from "geolib";
 import { quickHull } from "./quickhull";
 import { sorted_points } from "./sortCoordinatesOfPolygon";
 import { Coordinate, GeoItem } from "./types";
@@ -65,8 +65,9 @@ function coordinateArrayToString(c: Coordinate[]) { return JSON.stringify(c.map(
  * @param polygon 
  * @returns 
  */
-export function isPointInPolygon(point: Coordinate, polygon: Coordinate[]) {
-    // console.log(`checking if point ${coordinateToString(point)} is in polygon: ${coordinateArrayToString(polygon)}`)
+export function isPointInPolygon2(point: Coordinate, polygon: Coordinate[], debugModeIsEnabled:boolean) {
+    if(debugModeIsEnabled) console.log(`[isPointInPolygon] checking if point ${coordinateToString(point)} is in polygon: ${coordinateArrayToString(polygon)}`)
+
     const num_vertices = polygon.length;
     const x = point.latitude;
     const y = point.longitude;
@@ -93,6 +94,8 @@ export function isPointInPolygon(point: Coordinate, polygon: Coordinate[]) {
         p1 = p2;
     }
 
+    if(debugModeIsEnabled) console.log('point is inside of polygon='+inside);
+
     return inside;
 }
 
@@ -108,7 +111,7 @@ function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherTyp
     const isDebugMode = false
     // const isDebugMode = currentCluster.concat(candidate).map(i => `${i.latitude} ${i.longitude}`).some(i => debuggingPolygonCoordinates.indexOf(i) > -1);
 
-    if(isDebugMode) console.log(`debugmode enabled, checking if we can increase polygon with coordinates: ${candidate.latitude} ${candidate.longitude} (currentSizeOfCluster=${currentCluster.length})`);
+    if(isDebugMode) console.log(`debugmode enabled, checking if we can increase polygon with coordinates: ${candidate.latitude} ${candidate.longitude} (currentSizeOfCluster=${currentCluster.length}, countOfItemsOfOtherTypes=${itemsOfOtherTypes.length})`);
     
     if(currentCluster.length + 1 <= 3){
         if(isDebugMode) console.log('currentCluster length < 3, allowing to add to polygon');
@@ -119,15 +122,24 @@ function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherTyp
     const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.latitude, coord.longitude]))); // is this right? long/lat i/o lat/lon
     // const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.latitude, coord.longitude]))); // is this right? long/lat i/o lat/lon
     // const polygon = hullOfPolygon.map<Coordinate>(i => ({ latitude: i[1], longitude: i[0] }));
-    const polygon = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})))
-        .map<Coordinate>(i => ({ latitude: i.x, longitude: i.y }));
-    polygon.push(polygon[0]); // to close the loop in the polygon
+    const polygon = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]}))).map<Coordinate>(i => ({ latitude: i.x, longitude: i.y }));
+    //polygon.push(polygon[0]); // to close the loop in the polygon //  IS THIS NEEDED FOR THE ISPOINTINPOLYGON ray-trace algorithm?
 
     // assertion that we never flip the coordinates
     polygon.forEach(assertCoordinateIsInNLParameters);
 
+    //optimize, only evaluate itmesOfOtherTypes where the coordinate is in the bounding box of the polygon
+    const topLeftCoordOfPolygon = polygon.sort((a,b) => a.latitude < b.latitude && a.longitude < b.longitude ? 1 : -1)[0];
+    const bottomRightCoordOfPolygon = polygon.sort((a,b) => a.latitude > b.latitude && a.longitude > b.longitude ? 1 : -1)[0];
+
+
+
     // determine if we can find any coordinates in the list of itemsOfOtherTypes which are in bounds of our polygon
-    const polygonContainsCoordinateOfOtherType = itemsOfOtherTypes.some((otherItem) => isPointInPolygon(otherItem, polygon));
+    const polygonContainsCoordinateOfOtherType = itemsOfOtherTypes.some((otherItem) => {
+        //const debugPointInPolygon = otherItem.title === "peer (Pyrus communis)" && [52.03147226092894, 52.03145316768199, 52.031527550646324].indexOf(otherItem.latitude) > -1;
+        return isPointInPolygon(otherItem, polygon)
+    });
+
     if(isDebugMode) {
         console.log(toWKT(polygon));
         console.log(`could grow polygon: ${!polygonContainsCoordinateOfOtherType}`)
@@ -145,16 +157,19 @@ function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], m
 
     let clusterOptionsAreExhausted = false;
     while (remainingItems.length > 0 && clusterOptionsAreExhausted === false) {
+        
         // sort the remaining items on closestdistance to _any_ of our coordinates
-        let remainingItemsSortedClosestToOurCurrentClusterCoordinates = sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(cluster, remainingItems);
+        // but do respect a max distance to prevent very long stretched clusters from beeing formed
+        let remainingItemsSortedClosestToOurCurrentClusterCoordinates = sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(cluster, remainingItems)
+            .filter(itm => itm.closestDistanceToAnyOfOurCoordinates <= maxDistanceBetweenTreesInMeters);
 
         // if we do not have a polygon yet (size = 3) then we use the max distance calculation between trees
         // to prevent arbitrary datapoints from forming a cluster across the map
         // once we have a few datapoints set up we allow the polygon to grow to the size it can become
         // as long as it does not start to contain trees of other kinds
-        if (cluster.length <= 3) {
-            remainingItemsSortedClosestToOurCurrentClusterCoordinates = remainingItemsSortedClosestToOurCurrentClusterCoordinates.filter(itm => itm.closestDistanceToAnyOfOurCoordinates <= maxDistanceBetweenTreesInMeters);
-        }
+        // if (cluster.length <= 3) {
+        //     remainingItemsSortedClosestToOurCurrentClusterCoordinates = remainingItemsSortedClosestToOurCurrentClusterCoordinates.filter(itm => itm.closestDistanceToAnyOfOurCoordinates <= maxDistanceBetweenTreesInMeters);
+        // }
 
         // while we have not found a coordinate we can add:
         let succesfullyAddedCoordinateToCluster = false;
@@ -193,7 +208,3 @@ function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], m
         clusteredItems: cluster
     }
 }
-function toJWK(): any {
-    throw new Error("Function not implemented.");
-}
-
