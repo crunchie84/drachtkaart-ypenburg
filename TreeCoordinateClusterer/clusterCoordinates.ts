@@ -96,7 +96,11 @@ export function isPointInPolygon(point: Coordinate, polygon: Coordinate[]) {
     return inside;
 }
 
-
+function assertCoordinateIsInNLParameters(c: Coordinate): void {
+    if(c.latitude <= 52  || c.latitude >= 53 || c.longitude <= 4 || c.longitude >= 5) {
+        throw new Error(`AssertionFailed: latitude for NL should be [50-53], lon[4-5] but we got: "${coordinateToString(c)}"`);
+    }
+}
 
 
 const debuggingPolygonCoordinates=["52.03693117789577 4.367980202087854","52.03697674326133 4.368052040108446","52.03684916012748 4.367850894019149","52.03680359463939 4.367779056407846","52.036760678204104 4.368013232084188","52.036706125869436 4.367941598975996","52.036304361788815 4.3682568126650025","52.0301376492175 4.37129619399812","52.03625879654584 4.368184975509081","52.03615867898267 4.368041506140097","52.03610412666267 4.367969873955228","52.03678709866188 4.3689891513691395","52.03674153386509 4.368917312693975","52.03688721507158 4.369132624868356","52.033811245177134 4.364772055535365","52.03151653413848 4.363439977647538","52.03141856456123 4.363544229144939","52.03139109701199 4.363486564112035","52.03135476918293 4.363443674830854","52.031318314642554 4.363386215351401","52.03128186007417 4.3633287559654725","52.03124553218764 4.3632858669166765","52.03120907757035 4.363228407705727","52.03139818348736 4.363267804312784","52.03127071890994 4.3630812671039365","52.031214642521405 4.362834805968036","52.03127653692991 4.36271680531272","52.03135615150722 4.362569252641849","52.03141817245775 4.362465821543966","52.03361618911348 4.365082560162595","52.0280061141163 4.37367649907766","52.0276391320893 4.37420012351558","52.0277339807317 4.37447481554615","52.03693277973718 4.369204463996188","52.0276521477889 4.374556432318"];
@@ -112,7 +116,7 @@ function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherTyp
     }
 
     // generate polygon based on our list of coordinates
-    const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.longitude, coord.latitude]))); // is this right? long/lat i/o lat/lon
+    const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.latitude, coord.longitude]))); // is this right? long/lat i/o lat/lon
     // const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.latitude, coord.longitude]))); // is this right? long/lat i/o lat/lon
     // const polygon = hullOfPolygon.map<Coordinate>(i => ({ latitude: i[1], longitude: i[0] }));
     const polygon = sorted_points(hullOfPolygon.map(el => ({ x: el[1], y: el[0]})))
@@ -120,18 +124,9 @@ function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherTyp
     polygon.push(polygon[0]); // to close the loop in the polygon
 
     // assertion that we never flip the coordinates
-    polygon.forEach(c => {
-        if(c.latitude <= 52  || c.latitude >= 53 || c.longitude <= 4 || c.longitude >= 5) {
-            throw new Error(`AssertionFailed: latitude for NL should be [50-53], lon[4-5] but we got: "${coordinateToString(c)}"`);
-        }
-    });
+    polygon.forEach(c => assertCoordinateIsInNLParameters);
 
-
-    // const sortedPointsOfPolygon = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})))
-    //     .map<Coordinate>(i => ({ latitude: i.x, longitude: i.y }))
-//console.log(JSON.stringify(sortedPointsOfPolygon));
     // determine if we can find any coordinates in the list of itemsOfOtherTypes which are in bounds of our polygon
-
     const polygonContainsCoordinateOfOtherType = itemsOfOtherTypes.some((otherItem) => isPointInPolygon(otherItem, polygon));
     if(isDebugMode) {
         console.log(toWKT(polygon));
