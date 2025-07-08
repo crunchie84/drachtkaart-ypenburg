@@ -128,17 +128,23 @@ function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherTyp
     // assertion that we never flip the coordinates
     polygon.forEach(assertCoordinateIsInNLParameters);
 
-    //optimize, only evaluate itmesOfOtherTypes where the coordinate is in the bounding box of the polygon
-    const topLeftCoordOfPolygon = polygon.sort((a,b) => a.latitude < b.latitude && a.longitude < b.longitude ? 1 : -1)[0];
-    const bottomRightCoordOfPolygon = polygon.sort((a,b) => a.latitude > b.latitude && a.longitude > b.longitude ? 1 : -1)[0];
-
+    //optimization, only try otherTypes which are within the bounding box
+    const boundingBoxOfPolygon = getBoundingBoxOfPolygon(polygon); // TODO - this could be an optimization when it works correctly
+    // topleft =52.05225658805432, 4.3393071706362125
+    // bottomright=52.02443237458995, 4.399131162446949
 
 
     // determine if we can find any coordinates in the list of itemsOfOtherTypes which are in bounds of our polygon
-    const polygonContainsCoordinateOfOtherType = itemsOfOtherTypes.some((otherItem) => {
-        //const debugPointInPolygon = otherItem.title === "peer (Pyrus communis)" && [52.03147226092894, 52.03145316768199, 52.031527550646324].indexOf(otherItem.latitude) > -1;
-        return isPointInPolygon(otherItem, polygon)
-    });
+    const polygonContainsCoordinateOfOtherType = itemsOfOtherTypes
+        // .filter(item => item.latitude >= boundingBoxOfPolygon.left_top_latitude 
+        //     && item.latitude <= boundingBoxOfPolygon.right_bottom_latitude
+        //     && item.longitude >= boundingBoxOfPolygon.left_top_longitude
+        //     && item.longitude <= boundingBoxOfPolygon.right_bottom_longitude
+        // )
+        .some((otherItem) => {
+            //const debugPointInPolygon = otherItem.title === "peer (Pyrus communis)" && [52.03147226092894, 52.03145316768199, 52.031527550646324].indexOf(otherItem.latitude) > -1;
+            return isPointInPolygon(otherItem, polygon)
+        });
 
     if(isDebugMode) {
         console.log(toWKT(polygon));
@@ -208,3 +214,16 @@ function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], m
         clusteredItems: cluster
     }
 }
+
+function getBoundingBoxOfPolygon(polygon: Coordinate[]): { left_top_latitude: number; left_top_longitude: number; right_bottom_latitude: number; right_bottom_longitude: number; } {
+    const latitudes = polygon.map(c => c.latitude).sort((a,b) => a - b);
+    const longitudes = polygon.map(c => c.longitude).sort((a,b) => a - b);
+
+    return {
+        left_top_latitude: latitudes[0],
+        left_top_longitude: longitudes[0],
+        right_bottom_latitude: latitudes[latitudes.length],
+        right_bottom_longitude: longitudes[longitudes.length]
+    };
+}
+
