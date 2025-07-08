@@ -7,6 +7,7 @@ set -euo pipefail
 # set -x 
 
 rm tmp/*.json
+rm output/*.csv
 
 
 echo "Converting tree information from Pijnacker-Nootdorp dataset to zoom in on Ypenburg and only render trees relevant for honeybees..."
@@ -61,8 +62,8 @@ jq 'map({
   coordinateRD: "\(.X) \(.Y)",
   Pollenwaarde: .Pollenwaarde,
   Nectarwaarde: .Nectarwaarde,
-  StartBloei: .SB,
-  EindeBloei: .EB,
+  Startbloei: .SB,
+  Eindebloei: .EB,
   title: "\(.["Soortnaam Nederlands"]) (\(.Soortnaam))",
   body: "Nectarwaarde: \(.Nectarwaarde) , Pollenwaarde: \(.Pollenwaarde), Bloeit van \(.SB) t/m \(.EB)",
 })' tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched.json > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFilteredEnriched_Prep4Export.json
@@ -106,8 +107,8 @@ jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
 # transform the list to the output format we need for google maps
 jq 'map({
   coordinateRD: "\(.geometry.coordinates[0]) \(.geometry.coordinates[1])",
-  StartBloei: .properties.SB,
-  EindeBloei: .properties.EB,
+  Startbloei: .properties.SB,
+  Eindebloei: .properties.EB,
   Pollenwaarde: .properties.Pollenwaarde,
   Nectarwaarde: .properties.Nectarwaarde,
   title: "\(.properties.BOOMSOORT_NEDERLANDS) (\(.properties.BOOMSOORT_WETENSCHAPPELIJ))",
@@ -164,8 +165,8 @@ jq 'map({
     longitude: .lon,
     Pollenwaarde: .tags.Pollenwaarde,
     Nectarwaarde: .tags.Nectarwaarde,
-    StartBloei: .tags.SB,
-    EindeBloei: .tags.EB,
+    Startbloei: .tags.SB,
+    Eindebloei: .tags.EB,
     title: "\(.tags.BOOMSOORT_NEDERLANDS) (\(.tags.species))",
     body: "Nectarwaarde: \(.tags.Nectarwaarde), Pollenwaarde: \(.tags.Pollenwaarde), Bloeit van \(.tags.SB) t/m \(.tags.EB)" 
     })' tmp/filtered-only-drachtplanten-local-trees-delft-enriched.json > tmp/output-delft-trees-formatted.json
@@ -188,47 +189,54 @@ jq 'map({
     longitude: .longitude,
     Pollenwaarde: .Pollenwaarde,
     Nectarwaarde: .Nectarwaarde,
-    StartBloei: .SB,
-    EindeBloei: .EB,
+    StartBloei: .Startbloei,
+    EindeBloei: .Eindebloei,
     title: .title,
     body: .body
 })' tmp/merged-output-filtered-pollen.json > tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json
 
-# cluster trees into shapes / WKT format
-NODE_OPTIONS='--max-semi-space-size=128 --max-old-space-size=8096' ts-node TreeCoordinateClusterer/index.ts tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json > tmp/clustered-trees-shapes.json
-jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/clustered-trees-shapes.json > output/map-clustered-trees-shapes.csv
-
+# split the total tree list into separate once per month: 3/4/5/6/7/8/9 to see if that results in relevancy
+# echo "Going to split the masterlist of trees into blossoming trees per month"
+for i in {4..9}
+do
+    echo "splitting master list of trees... selecting trees that blossom in month #$i..."
+    jq "[.[] | select((.StartBloei | tonumber?) <= $i and (.EindeBloei | tonumber?) >= $i)]" tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json > tmp/mergedresult-trees-blossoming_month_$i.json
+    
+    echo "clustering trees..."
+    # cluster trees into shapes / WKT format
+    NODE_OPTIONS='--max-semi-space-size=128 --max-old-space-size=8096' ts-node TreeCoordinateClusterer/index.ts tmp/mergedresult-trees-blossoming_month_$i.json > tmp/mergedresult-trees-clustered-blossoming_month_$i.json
+    jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/mergedresult-trees-clustered-blossoming_month_$i.json > output/mergedresult-trees-clustered-blossoming_month_$i.csv
+    echo "converting to csv"
+done
 
 #
-# OUTPUT TO FINAL FILES // CHUNKING
+# OUTPUT TO FINAL FILES when we do an ALL in ONE
 #
-
-
-jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json > output/merged-output-filtered-pollenindex-cleanedup-formatted.csv
-echo "The masterlist is done! -> output/merged-output-filtered-pollenindex-cleanedup-formatted.csv"
+# jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json > output/merged-output-filtered-pollenindex-cleanedup-formatted.csv
+# echo "The masterlist is done! -> output/merged-output-filtered-pollenindex-cleanedup-formatted.csv"
 
 ## splitting in max 2000 items because google maps limitations (as test)
 
-INPUT_FILE="tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json"
-OUTPUT_PREFIX="tmp/merged-output-delft-denhaag_chunk"
-OUTPUT_CSV_PREFIX="output/merged-output-delft-denhaag_chunk"
-CHUNK_SIZE=2000
+# INPUT_FILE="tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json"
+# OUTPUT_PREFIX="tmp/merged-output-delft-denhaag_chunk"
+# OUTPUT_CSV_PREFIX="output/merged-output-delft-denhaag_chunk"
+# CHUNK_SIZE=2000
 
-# Get the total number of items in the array
-TOTAL_ITEMS=$(jq 'length' "$INPUT_FILE")
+# # Get the total number of items in the array
+# TOTAL_ITEMS=$(jq 'length' "$INPUT_FILE")
 
-# Calculate the number of chunks
-NUM_CHUNKS=$(( (TOTAL_ITEMS + CHUNK_SIZE - 1) / CHUNK_SIZE ))
+# # Calculate the number of chunks
+# NUM_CHUNKS=$(( (TOTAL_ITEMS + CHUNK_SIZE - 1) / CHUNK_SIZE ))
 
-echo "Splitting $TOTAL_ITEMS items into $NUM_CHUNKS chunks..."
+# echo "Splitting $TOTAL_ITEMS items into $NUM_CHUNKS chunks..."
 
-# Loop through and split
-for ((i=0; i<NUM_CHUNKS; i++)); do
-    START=$((i * CHUNK_SIZE))
-    END=$((START + CHUNK_SIZE - 1))
-    jq ".[$START:$((START + CHUNK_SIZE))]" "$INPUT_FILE" > "${OUTPUT_PREFIX}_${i}.json"
-    jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' "${OUTPUT_PREFIX}_${i}.json" > "${OUTPUT_CSV_PREFIX}_${i}.csv"
-    echo "Created ${OUTPUT_PREFIX}_${i}.json with items $START to $END"
-done
+# # Loop through and split
+# for ((i=0; i<NUM_CHUNKS; i++)); do
+#     START=$((i * CHUNK_SIZE))
+#     END=$((START + CHUNK_SIZE - 1))
+#     jq ".[$START:$((START + CHUNK_SIZE))]" "$INPUT_FILE" > "${OUTPUT_PREFIX}_${i}.json"
+#     jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' "${OUTPUT_PREFIX}_${i}.json" > "${OUTPUT_CSV_PREFIX}_${i}.csv"
+#     echo "Created ${OUTPUT_PREFIX}_${i}.json with items $START to $END"
+# done
 
 echo "Done."

@@ -145,7 +145,7 @@ function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInM
     });
 
     // TODO OPTIMIZE - now that we have created clusters - identify which are overlapping and break one of those into smaller clusters untill we have no more clusters that overlap
-
+    // use https://github.com/varjak/polygon-intersection-helper/tree/develop ?
 
     return result;
 }
