@@ -1,15 +1,18 @@
 # Bomenkaart voor bijen obv Den Haag
 
-Maken van een bomenkaart met drachtbomen in directe nabijheid van Ypenburg
+Maken van een bomenkaart met drachtbomen in directe nabijheid van Ypenburg. Combinatie van de bomenkaarten delft, den haag (nootdorp?) en de drachtplanten informatie van imkerpedia
 
-Combinatie van de bomenkaarten delft, den haag (nootdorp?) en de drachtplanten informatie van imkerpedia
+Resultaten hier zichtbaar: [https://www.google.com/maps/d/u/0/edit?mid=1rEXjvP8rAoK41iPF5tkkcRLcWMVaP8c&usp=sharing](https://www.google.com/maps/d/u/0/edit?mid=1rEXjvP8rAoK41iPF5tkkcRLcWMVaP8c&usp=sharing)
 
 ## TODOs
 
-- [] splitsen van de dracht informatie in meerdere lagen - lente / zomer / herfst zodat zichtbaar wordt wanneer er minder drachtaanbod beschikbaar is
-- [] TODO clusteren bomen/shapes obv dichtbijheid van elkaar / grouperen shapes -> Vlakken van maken ? hoe dan? export in csv kan dat niet, KML?
+- [] Soms geeft de clustering overlap - dit kunnen we nog uitzoeken
+- [] Optimalisatie: enkel evalueren welke coordinaten in een cluster vallen obv de bouding box van de polygon
+- [] Manuele data toevoegen - drachtplanten zoals de Hedera of Japanse duizendknoop
+- [x] splitsen van de dracht informatie in meerdere lagen - lente / zomer / herfst zodat zichtbaar wordt wanneer er minder drachtaanbod beschikbaar is
+- [x] TODO clusteren bomen/shapes obv dichtbijheid van elkaar / grouperen shapes -> Vlakken van maken ? hoe dan? export in csv kan dat niet, KML?
 - [x] Data fouten in denhaag vinden - welke bomen zijn er uitgefilterd obv typo's die er hadden moeten zijn?
-- [] TODO - import in google maps is max 2000 datapunten per layer, max 10 layers totaal 10.000 datapunten -> clusteren?
+- [x] TODO - import in google maps is max 2000 datapunten per layer, max 10 layers totaal 10.000 datapunten -> clusteren?
   - specs KML layer om shapes te importeren? https://developers.google.com/maps/documentation/javascript/kmllayer?csw=1 
 
 ## Setup
@@ -29,7 +32,6 @@ Combinatie van de bomenkaarten delft, den haag (nootdorp?) en de drachtplanten i
 	- only retian the name/nl name/x/y fields in the excel and export to csv
 	- `csvjson Bomenbestand-Nootdorp-20250701.csv | jq '.' > Bomenbestand-Nootdorp-20250701.json`
 	- find all the unique tree names to determine cleanup rules `jq '[.[] | .Soortnaam | select(length > 0)] | unique' Bomenbestand-Nootdorp-20250701.json > Bomenbestand-Nootdorp-Unique-Bomen.json`
-
 
 
 ## Den Haag Bomen Data
@@ -90,10 +92,9 @@ and... profit!
 
 rijksdriehoek to wgs84 script copied from https://github.com/arjendeblok/rd2wgs84/tree/main
 
-
 ## Clustering of the coordinates
 Hierarchical clustering (https://en.wikipedia.org/wiki/Hierarchical_clustering)
-Agglomerative: Agglomerative: Agglomerative clustering, often referred to as a "bottom-up" approach, begins with each data point as an individual cluster. At each step, the algorithm merges the two most similar clusters based on a chosen distance metric (e.g., Euclidean distance) and linkage criterion (e.g., single-linkage, complete-linkage)[2]. This process continues until all data points are combined into a single cluster or a stopping criterion is met. 
+Agglomerative: Agglomerative clustering, often referred to as a "bottom-up" approach, begins with each data point as an individual cluster. At each step, the algorithm merges the two most similar clusters based on a chosen distance metric (e.g., Euclidean distance) and linkage criterion (e.g., single-linkage, complete-linkage)[2]. This process continues until all data points are combined into a single cluster or a stopping criterion is met. 
 
 
 ## WKT stuff on how to load it onto the map
