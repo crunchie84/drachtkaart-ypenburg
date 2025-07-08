@@ -119,12 +119,12 @@ function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherTyp
     const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.latitude, coord.longitude]))); // is this right? long/lat i/o lat/lon
     // const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.latitude, coord.longitude]))); // is this right? long/lat i/o lat/lon
     // const polygon = hullOfPolygon.map<Coordinate>(i => ({ latitude: i[1], longitude: i[0] }));
-    const polygon = sorted_points(hullOfPolygon.map(el => ({ x: el[1], y: el[0]})))
+    const polygon = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})))
         .map<Coordinate>(i => ({ latitude: i.x, longitude: i.y }));
     polygon.push(polygon[0]); // to close the loop in the polygon
 
     // assertion that we never flip the coordinates
-    polygon.forEach(c => assertCoordinateIsInNLParameters);
+    polygon.forEach(assertCoordinateIsInNLParameters);
 
     // determine if we can find any coordinates in the list of itemsOfOtherTypes which are in bounds of our polygon
     const polygonContainsCoordinateOfOtherType = itemsOfOtherTypes.some((otherItem) => isPointInPolygon(otherItem, polygon));
