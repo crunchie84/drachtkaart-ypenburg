@@ -6,8 +6,8 @@ set -euo pipefail
 # for debugging; show the commands before they are executed
 # set -x 
 
-rm tmp/*.json
-rm output/*.csv
+rm -f tmp/*.json
+rm -f output/*.csv
 
 
 echo "Converting tree information from Pijnacker-Nootdorp dataset to zoom in on Ypenburg and only render trees relevant for honeybees..."
