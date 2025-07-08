@@ -11,6 +11,3 @@ export interface GeoItem extends Coordinate{
   StartBloei: number;
   EindeBloei: number;
 }
-
-export interface distanceCache { [index: string]: number };
-// export type distanceCache = Array<{a:Coordinate,b:Coordinate, distanceInMeters:number }>;

@@ -6,8 +6,8 @@ import { getDistance } from 'geolib';
 
 import { groupBy } from './groupBy';
 
-import { Coordinate, GeoItem, distanceCache } from './types';
-import { calculateDistanceCache, clusterTreesWithoutOverlappingOtherClusters, isPointInPolygon } from './clusterCoordinates';
+import { Coordinate, GeoItem } from './types';
+import { clusterTreesWithoutOverlappingOtherClusters } from './clusterCoordinates';
 import { toWKT } from './outputFormatters';
 
 // const v8 = require('node:v8');
@@ -27,80 +27,39 @@ const rawData = fs.readFileSync(filePath, 'utf-8');
 const data: GeoItem[] = JSON.parse(rawData);
 const maxDistanceToOtherTreesInMeters = 100;//crossings/roads in NL seem to be 30m spacing of trees
 
-//const distanceCache = calculateDistanceCache(data);
-const cache: distanceCache = undefined;
+const debugging = false;
+if(debugging) {
+    const debugPolygon = ["52.0273267472761 4.37307969465699","52.0273061947089 4.37287882148708","52.0271903852604 4.37293747232614","52.0270104347336 4.37377949240016","52.0277038217237 4.37380001552899","52.028653604916 4.37428690877909","52.0281714506803 4.37327306014986","52.0281265361635 4.37317207242521"]
+    const treesInPolygon = ["52.0274250925171 4.37351597825935","52.027386847326 4.3733376686683"]
+    function debugOutput(polygonPointsToCheck: Array<string>, coordinatesWhichShouldNotBeInPolygon: Array<string>) {
+        function toGeoItem(i: string, title: string): GeoItem {
+            const parts = i.split(' ');
+            return {
+                title: title,
+                body: '',
+                Pollenwaarde: undefined,
+                Nectarwaarde: undefined,
+                EindeBloei: undefined,
+                StartBloei: undefined,
+                latitude: parseFloat(parts[0]), 
+                longitude: parseFloat(parts[1])
+            };
+        }
 
-const debugPolygon = ["52.0273267472761 4.37307969465699","52.0273061947089 4.37287882148708","52.0271903852604 4.37293747232614","52.0270104347336 4.37377949240016","52.0277038217237 4.37380001552899","52.028653604916 4.37428690877909","52.0281714506803 4.37327306014986","52.0281265361635 4.37317207242521"]
-const treesInPolygon = ["52.0274250925171 4.37351597825935","52.027386847326 4.3733376686683"]
-function debugOutput(polygonPointsToCheck: Array<string>, coordinatesWhichShouldNotBeInPolygon: Array<string>) {
-    function toGeoItem(i: string, title: string): GeoItem {
-        const parts = i.split(' ');
-        return {
-            title: title,
-            body: '',
-            Pollenwaarde: undefined,
-            Nectarwaarde: undefined,
-            EindeBloei: undefined,
-            StartBloei: undefined,
-            latitude: parseFloat(parts[0]), 
-            longitude: parseFloat(parts[1])
-        };
+        const debugPolygon = polygonPointsToCheck.map<GeoItem>(i => toGeoItem(i, 'WrongPolygonTreeType'));
+        const treesInPolygon = coordinatesWhichShouldNotBeInPolygon.map<GeoItem>(i => toGeoItem(i, 'OtherTreeType'));
+
+        const result = groupTreesByKindAndCluster(debugPolygon.concat(treesInPolygon), maxDistanceToOtherTreesInMeters);
+        console.log('FINAL WKT OUTPUT: ');
+        console.log(`GEOMETRYCOLLECTION (${toOutputObjectArray(result).map(i => i.WKT).join(', ')})`);
     }
-
-    const debugPolygon = polygonPointsToCheck.map<GeoItem>(i => toGeoItem(i, 'WrongPolygonTreeType'));
-    const treesInPolygon = coordinatesWhichShouldNotBeInPolygon.map<GeoItem>(i => toGeoItem(i, 'OtherTreeType'));
-
-    const result = groupTreesByKindAndCluster(debugPolygon.concat(treesInPolygon), maxDistanceToOtherTreesInMeters, cache);
-    console.log('FINAL WKT OUTPUT: ');
-    console.log(`GEOMETRYCOLLECTION (${toOutputObjectArray(result).map(i => i.WKT).join(', ')})`);
+    debugOutput(debugPolygon, treesInPolygon);
 }
-
-debugOutput(debugPolygon, treesInPolygon);
-
-// const debugPolygon = ["4.362834805968036 52.031214642521405", "4.36271680531272 52.03127653692991", "4.362569252641849 52.03135615150722", "4.362465821543966 52.03141817245775", "4.364772055535365 52.033811245177134", "4.367779056407846 52.03680359463939", "4.367850894019149 52.03684916012748", "4.367980202087854 52.03693117789577", "4.368052040108446 52.03697674326133", "4.369204463996188 52.03693277973718", "4.37129619399812 52.0301376492175", "4.362834805968036 52.031214642521405"]
-//     .map<Coordinate>(i => {
-//         const parts = i.split(' ');
-//         return {
-//             latitude: parseFloat(parts[1]),
-//             longitude: parseFloat(parts[0]),
-//         }
-//     })
-//     .map<GeoItem>(i => ({
-//         title: 'Noorse esdoorn (Acer platanoides)',
-//         body: '',
-//         Pollenwaarde: undefined,
-//         Nectarwaarde: undefined,
-//         EindeBloei: undefined,
-//         StartBloei: undefined,
-//         latitude: i.latitude, 
-//         longitude: i.longitude
-//     }));
-
-
-// const treeInPolygon:GeoItem = {
-//     title: 'kers',
-//     body: '',
-//     Pollenwaarde: undefined,
-//     Nectarwaarde: undefined,
-//     EindeBloei: undefined,
-//     StartBloei: undefined,
-//     latitude: 52.03392252950643,
-//     longitude: 4.369316604411348
-// }
-
-
-
-// const test = isPointInPolygon(treeInPolygon, debugPolygon);
-// if(!test) {
-//     throw new Error(`bug in implementation? given coordinate should be contained in polygon!`);
-// }
-// console.log(`kers debug isInPolygon=${test}`)
-
-// console.log("going to group trees");
-
-// FINAL VERSION HERE:
-// const result = groupTreesByKindAndCluster(data, maxDistanceToOtherTreesInMeters, cache);
-// console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
+else {
+    // FINAL VERSION HERE:
+    const result = groupTreesByKindAndCluster(data, maxDistanceToOtherTreesInMeters);
+    console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
+}
 
 interface outputType {
     title: string;
@@ -197,13 +156,13 @@ function groupCoordinatesIntoClusters(items: GeoItem[], maxDistanceItemsInGroupI
 }
 
 
-function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInMeters: number, distanceCache: distanceCache): Array<{ treeKind: GeoItem, clusters: GeoItem[][]}> {
+function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInMeters: number): Array<{ treeKind: GeoItem, clusters: GeoItem[][]}> {
     // group all GeoItems based on SoortNaam
     const groupedData = groupBy(items, (i => i.title));
 
     // debug info
-    const treeKindsCount = groupedData.length;
-    let treeKindsDone = 0;
+    // const treeKindsCount = groupedData.length;
+    // let treeKindsDone = 0;
 
     const result = groupedData
     .map((groupedTrees) => {
@@ -211,7 +170,7 @@ function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInM
         const soort = groupedTrees.key;
 
         //const clustersOfTreeKind = groupCoordinatesIntoClusters(groupedTrees.items, maxDistanceToOtherTreesInMeters);
-        const clustersOfTreeKind = clusterTreesWithoutOverlappingOtherClusters(groupedTrees.items, items, maxDistanceToOtherTreesInMeters, distanceCache);
+        const clustersOfTreeKind = clusterTreesWithoutOverlappingOtherClusters(groupedTrees.items, items, maxDistanceToOtherTreesInMeters);
 
         return {
             treeKind: items.find(i => i.title === soort) || {} as GeoItem, // cheats to fix the nullref typescript assumption

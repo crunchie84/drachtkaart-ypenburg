@@ -1,10 +1,10 @@
-import { getDistance, latitudeKeys } from "geolib";
+import { getDistance } from "geolib";
 import { quickHull } from "./quickhull";
 import { sorted_points } from "./sortCoordinatesOfPolygon";
-import { Coordinate, distanceCache, GeoItem } from "./types";
+import { Coordinate, GeoItem } from "./types";
 import { toWKT } from "./outputFormatters";
 
-export function clusterTreesWithoutOverlappingOtherClusters(currentItems: GeoItem[], allItems: GeoItem[], maxDistanceBetweenTreesInMeters: number, distanceCache: distanceCache): GeoItem[][]{
+export function clusterTreesWithoutOverlappingOtherClusters(currentItems: GeoItem[], allItems: GeoItem[], maxDistanceBetweenTreesInMeters: number): GeoItem[][]{
     //while currentItems has remaining items
     // create a new cluster using the first coordinate of the remaining Items
     // while succesfully added last coordinate to the new cluster
@@ -24,7 +24,7 @@ export function clusterTreesWithoutOverlappingOtherClusters(currentItems: GeoIte
     const clusters = new Array<GeoItem[]>();
     let remainingItems = currentItems;
     while(remainingItems.length > 0) {
-        const result = clusterItems(remainingItems, otherItems, maxDistanceBetweenTreesInMeters, distanceCache);
+        const result = clusterItems(remainingItems, otherItems, maxDistanceBetweenTreesInMeters);
         remainingItems = result.remainingItems;
         const nextCluster = result.clusteredItems;
         
@@ -34,47 +34,11 @@ export function clusterTreesWithoutOverlappingOtherClusters(currentItems: GeoIte
     return clusters;
 }
 
-function createDistanceCacheKey(a: Coordinate, b: Coordinate) {
-    // sort them always in the same way
-    return JSON.stringify([a.latitude, a.longitude,b.latitude, b.longitude].sort());
-}
-
-export function calculateDistanceCache(allCoordinates: Coordinate[]): distanceCache {
-console.log("calculating distance from all coordinates to all coordinates... sit tight, this will take a while....")
-const total = allCoordinates.length * allCoordinates.length;
-let i = 0;
-
-    const result: distanceCache = {};
-    allCoordinates.forEach((coord) => {
-        allCoordinates
-            .forEach((otherCoord) => {
-                i++;
-                if(i %100000 === 0) console.log(`${i}/${total}`)
-                const cacheKey = createDistanceCacheKey(coord, otherCoord);
-                if(result[cacheKey] === undefined){
-                    result[cacheKey] = getDistance(coord, otherCoord)
-                }
-            });
-    });
-console.log('cache calculated');
-    return result;
-}
-
-
-function sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(coordinatesOfCluster: GeoItem[], remainingNonClusteredItems: GeoItem[], distanceCache: distanceCache){
+function sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(coordinatesOfCluster: GeoItem[], remainingNonClusteredItems: GeoItem[]){
     const sorted = remainingNonClusteredItems
             .map(candidateCoordinate => {
                 const closestDistanceToAnyOfOurCoordinates = coordinatesOfCluster
                     .map(currentCoordinateOfCluster => {
-                        if(distanceCache !== undefined ){
-                            const cachekey = createDistanceCacheKey(currentCoordinateOfCluster, candidateCoordinate);
-                            if(distanceCache[cachekey] === undefined) {
-                                console.log(`cache miss!, adding to cache ${cachekey}`);
-                                distanceCache[cachekey] = getDistance(currentCoordinateOfCluster, candidateCoordinate);
-                            }
-                            return distanceCache[cachekey];
-                        }
-
                         return getDistance(
                             { latitude: currentCoordinateOfCluster.latitude, longitude: currentCoordinateOfCluster.longitude },
                             { latitude: candidateCoordinate.latitude, longitude: candidateCoordinate.longitude }
@@ -155,6 +119,14 @@ function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherTyp
         .map<Coordinate>(i => ({ latitude: i.x, longitude: i.y }));
     polygon.push(polygon[0]); // to close the loop in the polygon
 
+    // assertion that we never flip the coordinates
+    polygon.forEach(c => {
+        if(c.latitude < 50) {
+            throw new Error(`AssertionFailed: latitude for NL should be < 50, lon > 4 but we got: "${coordinateToString(c)}"`);
+        }
+    });
+
+
     // const sortedPointsOfPolygon = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})))
     //     .map<Coordinate>(i => ({ latitude: i.x, longitude: i.y }))
 //console.log(JSON.stringify(sortedPointsOfPolygon));
@@ -168,7 +140,7 @@ function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherTyp
     return !polygonContainsCoordinateOfOtherType;
 }
 
-function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], maxDistanceBetweenTreesInMeters: number, distanceCache: distanceCache) : {remainingItems: GeoItem[], clusteredItems: GeoItem[]} {
+function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], maxDistanceBetweenTreesInMeters: number) : {remainingItems: GeoItem[], clusteredItems: GeoItem[]} {
     if(remainingItems.length === 0) {
         throw new Error('clustering can only be done with > 0 items to cluster');
     }
@@ -179,7 +151,7 @@ function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], m
     let clusterOptionsAreExhausted = false;
     while (remainingItems.length > 0 && clusterOptionsAreExhausted === false) {
         // sort the remaining items on closestdistance to _any_ of our coordinates
-        let remainingItemsSortedClosestToOurCurrentClusterCoordinates = sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(cluster, remainingItems, distanceCache);
+        let remainingItemsSortedClosestToOurCurrentClusterCoordinates = sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(cluster, remainingItems);
 
         // if we do not have a polygon yet (size = 3) then we use the max distance calculation between trees
         // to prevent arbitrary datapoints from forming a cluster across the map
