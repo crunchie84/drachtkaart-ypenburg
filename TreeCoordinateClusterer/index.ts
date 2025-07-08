@@ -2,18 +2,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as process from 'process';
 
-import { getDistance, longitudeKeys } from 'geolib';
+import { getDistance } from 'geolib';
 
 import { groupBy } from './groupBy';
-import { quickHull } from './quickhull';
-import { GeoItem, distanceCache } from './types';
-import { calculateDistanceCache, clusterTreesWithoutOverlappingOtherClusters } from './clusterCoordinates';
-import { sorted_points } from './sortCoordinatesOfPolygon';
 
-const v8 = require('node:v8');
-const { heap_size_limit } = v8.getHeapStatistics();
-const heapSizeInGB = heap_size_limit / (1024 * 1024 * 1024);
-console.log(`${heapSizeInGB} GB`);
+import { Coordinate, GeoItem, distanceCache } from './types';
+import { calculateDistanceCache, clusterTreesWithoutOverlappingOtherClusters, isPointInPolygon } from './clusterCoordinates';
+import { toWKT } from './outputFormatters';
+
+// const v8 = require('node:v8');
+// const { heap_size_limit } = v8.getHeapStatistics();
+// const heapSizeInGB = heap_size_limit / (1024 * 1024 * 1024);
+// console.log(`${heapSizeInGB} GB`);
 
 
 const args = process.argv.slice(2);
@@ -30,10 +30,77 @@ const maxDistanceToOtherTreesInMeters = 100;//crossings/roads in NL seem to be 3
 //const distanceCache = calculateDistanceCache(data);
 const cache: distanceCache = undefined;
 
-console.log("going to group trees");
-const result = groupTreesByKindAndCluster(data, maxDistanceToOtherTreesInMeters, cache);
+const debugPolygon = ["52.0273267472761 4.37307969465699","52.0273061947089 4.37287882148708","52.0271903852604 4.37293747232614","52.0270104347336 4.37377949240016","52.0277038217237 4.37380001552899","52.028653604916 4.37428690877909","52.0281714506803 4.37327306014986","52.0281265361635 4.37317207242521"]
+const treesInPolygon = ["52.0274250925171 4.37351597825935","52.027386847326 4.3733376686683"]
+function debugOutput(polygonPointsToCheck: Array<string>, coordinatesWhichShouldNotBeInPolygon: Array<string>) {
+    function toGeoItem(i: string, title: string): GeoItem {
+        const parts = i.split(' ');
+        return {
+            title: title,
+            body: '',
+            Pollenwaarde: undefined,
+            Nectarwaarde: undefined,
+            EindeBloei: undefined,
+            StartBloei: undefined,
+            latitude: parseFloat(parts[0]), 
+            longitude: parseFloat(parts[1])
+        };
+    }
 
-console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
+    const debugPolygon = polygonPointsToCheck.map<GeoItem>(i => toGeoItem(i, 'WrongPolygonTreeType'));
+    const treesInPolygon = coordinatesWhichShouldNotBeInPolygon.map<GeoItem>(i => toGeoItem(i, 'OtherTreeType'));
+
+    const result = groupTreesByKindAndCluster(debugPolygon.concat(treesInPolygon), maxDistanceToOtherTreesInMeters, cache);
+    console.log('FINAL WKT OUTPUT: ');
+    console.log(`GEOMETRYCOLLECTION (${toOutputObjectArray(result).map(i => i.WKT).join(', ')})`);
+}
+
+debugOutput(debugPolygon, treesInPolygon);
+
+// const debugPolygon = ["4.362834805968036 52.031214642521405", "4.36271680531272 52.03127653692991", "4.362569252641849 52.03135615150722", "4.362465821543966 52.03141817245775", "4.364772055535365 52.033811245177134", "4.367779056407846 52.03680359463939", "4.367850894019149 52.03684916012748", "4.367980202087854 52.03693117789577", "4.368052040108446 52.03697674326133", "4.369204463996188 52.03693277973718", "4.37129619399812 52.0301376492175", "4.362834805968036 52.031214642521405"]
+//     .map<Coordinate>(i => {
+//         const parts = i.split(' ');
+//         return {
+//             latitude: parseFloat(parts[1]),
+//             longitude: parseFloat(parts[0]),
+//         }
+//     })
+//     .map<GeoItem>(i => ({
+//         title: 'Noorse esdoorn (Acer platanoides)',
+//         body: '',
+//         Pollenwaarde: undefined,
+//         Nectarwaarde: undefined,
+//         EindeBloei: undefined,
+//         StartBloei: undefined,
+//         latitude: i.latitude, 
+//         longitude: i.longitude
+//     }));
+
+
+// const treeInPolygon:GeoItem = {
+//     title: 'kers',
+//     body: '',
+//     Pollenwaarde: undefined,
+//     Nectarwaarde: undefined,
+//     EindeBloei: undefined,
+//     StartBloei: undefined,
+//     latitude: 52.03392252950643,
+//     longitude: 4.369316604411348
+// }
+
+
+
+// const test = isPointInPolygon(treeInPolygon, debugPolygon);
+// if(!test) {
+//     throw new Error(`bug in implementation? given coordinate should be contained in polygon!`);
+// }
+// console.log(`kers debug isInPolygon=${test}`)
+
+// console.log("going to group trees");
+
+// FINAL VERSION HERE:
+// const result = groupTreesByKindAndCluster(data, maxDistanceToOtherTreesInMeters, cache);
+// console.log(JSON.stringify(toOutputObjectArray(result), undefined, '  '));
 
 interface outputType {
     title: string;
@@ -139,10 +206,8 @@ function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInM
     let treeKindsDone = 0;
 
     const result = groupedData
-//.filter(grp => grp.key === "Krimlinde (Tilia x europaea)")
-// .filter(grp => grp.key === "Spaanse aak / Veldesdoorn (Acer campestre)")
     .map((groupedTrees) => {
-        console.log(`clustering tree kind ${treeKindsDone++}/${treeKindsCount} (containing #${groupedTrees.items.length} trees) - "${groupedTrees.key}"`)
+// console.log(`clustering tree kind ${treeKindsDone++}/${treeKindsCount} (containing #${groupedTrees.items.length} trees) - "${groupedTrees.key}"`)
         const soort = groupedTrees.key;
 
         //const clustersOfTreeKind = groupCoordinatesIntoClusters(groupedTrees.items, maxDistanceToOtherTreesInMeters);
@@ -157,29 +222,3 @@ function groupTreesByKindAndCluster(items: GeoItem[], maxDistanceToOtherTreesInM
     return result;
 }
 
-// POLYGON((a),(b),(c),(a)) = shape
-// we only need the outermost coordinates to form the shape.
-
-function toWKT(cluster: {latitude: number, longitude: number}[]): string {
-  const coords = cluster.map(p => `${p.longitude} ${p.latitude}`);
-  if (coords.length === 1) {
-    return `POINT(${coords[0]})`;
-  }
-  else if (coords.length <=3) {
-    // return `LINESTRING(${coords.map(c => `${c}`).join(', ')})`;
-    return `MULTIPOINT(${coords.map(c => `${c}`).join(', ')})`;
-    // TODO; how to inflate LINESTRING into an AREA?
-  } else {
-    // find the outside of the polygon using quickHull algorithm
-    const hullOfPolygon = quickHull(cluster.map((coord) => ([coord.longitude, coord.latitude])));
-    const sortedPointsOfPolygon = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})));
-    sortedPointsOfPolygon.push(sortedPointsOfPolygon[0]); // to close the loop in the polygon
-    return `POLYGON((${sortedPointsOfPolygon.map((i) => `${i.x} ${i.y}`).join(', ')}))`;
-    // return `MULTIPOINT(${coords.map(c => `${c}`).join(', ')})`;
-    // return `POLYGON(${coords.map(c => `(${c})`).join(', ')})`;
-    // return `GEOMETRYCOLLECTION(${coords.map(c => `POINT(${c})`).join(', ')})`;
-  }
-}
-
-// MULTIPOINT werkt maar toont gewoon de losse markers ipv vlakken
-// POLYGON - moet deze meer dan 2 coordinaten hebben? hoe is de format hierin?

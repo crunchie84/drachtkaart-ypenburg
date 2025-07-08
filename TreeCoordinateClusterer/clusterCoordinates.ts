@@ -2,6 +2,7 @@ import { getDistance, latitudeKeys } from "geolib";
 import { quickHull } from "./quickhull";
 import { sorted_points } from "./sortCoordinatesOfPolygon";
 import { Coordinate, distanceCache, GeoItem } from "./types";
+import { toWKT } from "./outputFormatters";
 
 export function clusterTreesWithoutOverlappingOtherClusters(currentItems: GeoItem[], allItems: GeoItem[], maxDistanceBetweenTreesInMeters: number, distanceCache: distanceCache): GeoItem[][]{
     //while currentItems has remaining items
@@ -27,7 +28,7 @@ export function clusterTreesWithoutOverlappingOtherClusters(currentItems: GeoIte
         remainingItems = result.remainingItems;
         const nextCluster = result.clusteredItems;
         
-console.log(`next cluster size=${nextCluster.length}, remainingItemsToCluster=${remainingItems.length}`)
+// console.log(`next cluster size=${nextCluster.length}, remainingItemsToCluster=${remainingItems.length}`)
         clusters.push(nextCluster);
     }
     return clusters;
@@ -90,6 +91,9 @@ function sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(coordinat
     return sorted;
 }
 
+function coordinateToString(c: Coordinate) { return `${c.latitude} ${c.longitude}`}
+function coordinateArrayToString(c: Coordinate[]) { return JSON.stringify(c.map(coordinateToString))}
+
 /**
  * Determines if a point is inside a polygon using the ray-casting algorithm.
  * 
@@ -97,7 +101,8 @@ function sortCandidatesOnShortestDistanceToCurrentCoordinatesOfCluster(coordinat
  * @param polygon 
  * @returns 
  */
-function isPointInPolygon(point: Coordinate, polygon: Coordinate[]) {
+export function isPointInPolygon(point: Coordinate, polygon: Coordinate[]) {
+    // console.log(`checking if point ${coordinateToString(point)} is in polygon: ${coordinateArrayToString(polygon)}`)
     const num_vertices = polygon.length;
     const x = point.latitude;
     const y = point.longitude;
@@ -128,20 +133,38 @@ function isPointInPolygon(point: Coordinate, polygon: Coordinate[]) {
 }
 
 
-function growingToCoordinateCreatesPolygonWitoutOverlapInOtherTypesOfCoordinate(currentCluster: GeoItem[], candidate: GeoItem, itemsOfOtherTypes: GeoItem[]): boolean {
+
+
+const debuggingPolygonCoordinates=["52.03693117789577 4.367980202087854","52.03697674326133 4.368052040108446","52.03684916012748 4.367850894019149","52.03680359463939 4.367779056407846","52.036760678204104 4.368013232084188","52.036706125869436 4.367941598975996","52.036304361788815 4.3682568126650025","52.0301376492175 4.37129619399812","52.03625879654584 4.368184975509081","52.03615867898267 4.368041506140097","52.03610412666267 4.367969873955228","52.03678709866188 4.3689891513691395","52.03674153386509 4.368917312693975","52.03688721507158 4.369132624868356","52.033811245177134 4.364772055535365","52.03151653413848 4.363439977647538","52.03141856456123 4.363544229144939","52.03139109701199 4.363486564112035","52.03135476918293 4.363443674830854","52.031318314642554 4.363386215351401","52.03128186007417 4.3633287559654725","52.03124553218764 4.3632858669166765","52.03120907757035 4.363228407705727","52.03139818348736 4.363267804312784","52.03127071890994 4.3630812671039365","52.031214642521405 4.362834805968036","52.03127653692991 4.36271680531272","52.03135615150722 4.362569252641849","52.03141817245775 4.362465821543966","52.03361618911348 4.365082560162595","52.0280061141163 4.37367649907766","52.0276391320893 4.37420012351558","52.0277339807317 4.37447481554615","52.03693277973718 4.369204463996188","52.0276521477889 4.374556432318"];
+function growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherType(currentCluster: GeoItem[], candidate: GeoItem, itemsOfOtherTypes: GeoItem[]): boolean {
+    const isDebugMode = false
+    // const isDebugMode = currentCluster.concat(candidate).map(i => `${i.latitude} ${i.longitude}`).some(i => debuggingPolygonCoordinates.indexOf(i) > -1);
+
+    if(isDebugMode) console.log(`debugmode enabled, checking if we can increase polygon with coordinates: ${candidate.latitude} ${candidate.longitude} (currentSizeOfCluster=${currentCluster.length})`);
+    
     if(currentCluster.length + 1 <= 3){
+        if(isDebugMode) console.log('currentCluster length < 3, allowing to add to polygon');
         return true;// les then 3 edges can not create a polygon
     }
 
     // generate polygon based on our list of coordinates
-    const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.latitude, coord.longitude]))); // is this right? long/lat i/o lat/lon
-    const polygon = hullOfPolygon.map<Coordinate>(i => ({ latitude: i[0], longitude: i[1] }));
+    const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.longitude, coord.latitude]))); // is this right? long/lat i/o lat/lon
+    // const hullOfPolygon = quickHull(currentCluster.concat(candidate).map((coord) => ([coord.latitude, coord.longitude]))); // is this right? long/lat i/o lat/lon
+    // const polygon = hullOfPolygon.map<Coordinate>(i => ({ latitude: i[1], longitude: i[0] }));
+    const polygon = sorted_points(hullOfPolygon.map(el => ({ x: el[1], y: el[0]})))
+        .map<Coordinate>(i => ({ latitude: i.x, longitude: i.y }));
+    polygon.push(polygon[0]); // to close the loop in the polygon
+
     // const sortedPointsOfPolygon = sorted_points(hullOfPolygon.map(el => ({ x: el[0], y: el[1]})))
     //     .map<Coordinate>(i => ({ latitude: i.x, longitude: i.y }))
 //console.log(JSON.stringify(sortedPointsOfPolygon));
     // determine if we can find any coordinates in the list of itemsOfOtherTypes which are in bounds of our polygon
 
     const polygonContainsCoordinateOfOtherType = itemsOfOtherTypes.some((otherItem) => isPointInPolygon(otherItem, polygon));
+    if(isDebugMode) {
+        console.log(toWKT(polygon));
+        console.log(`could grow polygon: ${!polygonContainsCoordinateOfOtherType}`)
+    }
     return !polygonContainsCoordinateOfOtherType;
 }
 
@@ -151,7 +174,7 @@ function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], m
     }
     const cluster = [remainingItems.pop()];
 
-// console.log(`Starting new cluster, starting at ${cluster[0].latitude} ${cluster[0].longitude}. RemainingItems.length=${remainingItems.length} (${cluster[0].title})`);
+//  console.log(`Starting new cluster, starting at ${cluster[0].latitude} ${cluster[0].longitude}. RemainingItems.length=${remainingItems.length} (${cluster[0].title})`);
 
     let clusterOptionsAreExhausted = false;
     while (remainingItems.length > 0 && clusterOptionsAreExhausted === false) {
@@ -174,14 +197,13 @@ function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], m
             // find the nearest coordinate to any of our coordinates in the current cluster) and try to add it
             // if no more candidates are available we have reached our max cluster size and shouldContinue=false
             const candidateToAdd = remainingItemsSortedClosestToOurCurrentClusterCoordinates.shift().item;
-            if (growingToCoordinateCreatesPolygonWitoutOverlapInOtherTypesOfCoordinate(cluster, candidateToAdd, itemsOfOtherTypes)){
+            if (growingToCoordinateCreatesPolygonWitoutOverlapWithCoordinatesOfOtherType(cluster, candidateToAdd, itemsOfOtherTypes)){
 // console.log(` - found coordinate we can add without causing overlap with coordinates of other type: ${candidateToAdd.latitude} ${candidateToAdd.longitude} `);
                 succesfullyAddedCoordinateToCluster = true;
 
                 // its a match, we can add it to our cluster!
                 cluster.push(candidateToAdd);
 
-                // TODO: verify that we are able to mutate the remaining items in this scope
                 const assertLengthBefore = remainingItems.length;
                 remainingItems = remainingItems.filter(i => i.latitude !== candidateToAdd.latitude && i.longitude !== candidateToAdd.longitude);
                 if(assertLengthBefore === remainingItems.length) {
@@ -204,3 +226,7 @@ function clusterItems(remainingItems: GeoItem[], itemsOfOtherTypes: GeoItem[], m
         clusteredItems: cluster
     }
 }
+function toJWK(): any {
+    throw new Error("Function not implemented.");
+}
+
