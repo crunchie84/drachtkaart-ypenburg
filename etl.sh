@@ -40,7 +40,9 @@ jq '[.[] | select(.Soortnaam and (.Soortnaam | test("\\S")))]' tmp/Bomenbestand-
     | jq 'map(if .Soortnaam == "Sorbus thuringiaca" then .Soortnaam = "Sorbus x thuringiaca" else . end)' \
     | jq 'map(if .Soortnaam == "Tilia europaea" then .Soortnaam = "Tilia x europaea" else . end)' \
     > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNames.json
+
 # filter only trees that are in the list of plants relevant for honeybees
+# TODO - match based on tolowercase => jq ascii_downcase
 jq --slurpfile ids source/drachtplanten-ids.json 'map(select(.Soortnaam as $id | $ids[0] | index($id)))' tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNames.json > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFiltered.json
 
 # append honeybee tree info to the output
@@ -79,10 +81,22 @@ jq '.features | map(select(.geometry.coordinates[0] >= 83395 and .geometry.coord
 # // remove everything between ''
 # // remove everythign between ()
 # // remove any trailing spaces
-
+# finally rename
+# Acer capillipes x davidii -> Acer capillipes
+# Acer cappadocium subsp. -> Acer cappadocicum
+# Acer pseudoplatatnus -> Acer pseudoplatanus
+# Acer rubrum INDIAN SUMMER -> Acer rubrum
+# Acer tataricum  subsp. ginnala -> Acer tataricum  subsp.ginnala
+# Robinia hispida -> Robinia hispida (incl. ssp. fertilis)
 jq 'select(.) | map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub("\\([^)]*\\)"; ""))' tmp/bomenkaart-ypenburg.json \
     | jq "map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub(\"'[^']*'\"; \"\"))" \
     | jq 'map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub("^\\s+|\\s+$"; ""))' \
+    | jq 'map(if .Soortnaam == "Acer capillipes x davidii" then .Soortnaam = "Acer capillipes" else . end)' \
+    | jq 'map(if .Soortnaam == "Acer cappadocium subsp." then .Soortnaam = "Acer cappadocicum" else . end)' \
+    | jq 'map(if .Soortnaam == "Acer pseudoplatatnus" then .Soortnaam = "Acer pseudoplatanus" else . end)' \
+    | jq 'map(if .Soortnaam == "Acer rubrum INDIAN SUMMER" then .Soortnaam = "Acer rubrum" else . end)' \
+    | jq 'map(if .Soortnaam == "Acer tataricum  subsp. ginnala" then .Soortnaam = "Acer tataricum  subsp.ginnala" else . end)' \
+    | jq 'map(if .Soortnaam == "Robinia hispida" then .Soortnaam = "Robinia hispida (incl. ssp. fertilis)" else . end)' \
     > tmp/bomenkaart-cleanedup-ypenburg.json
 # filter only trees that are in the list of plants relevant for honeybees
 jq --slurpfile ids source/drachtplanten-ids.json 'map(select(.properties.BOOMSOORT_WETENSCHAPPELIJ as $id | $ids[0] | index($id)))' tmp/bomenkaart-cleanedup-ypenburg.json > tmp/bomenkaart-ypenburg-filtered.json
