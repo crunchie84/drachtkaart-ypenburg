@@ -40,14 +40,11 @@ jq '[.[] | select(.Soortnaam and (.Soortnaam | test("\\S")))]' tmp/Bomenbestand-
     | jq 'map(if .Soortnaam == "Sorbus thuringiaca" then .Soortnaam = "Sorbus x thuringiaca" else . end)' \
     | jq 'map(if .Soortnaam == "Tilia europaea" then .Soortnaam = "Tilia x europaea" else . end)' \
     > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNames.json
-
 # filter only trees that are in the list of plants relevant for honeybees
-# TODO - match based on tolowercase => jq ascii_downcase
-jq --slurpfile ids source/drachtplanten-ids.json 'map(select(.Soortnaam as $id | $ids[0] | index($id)))' tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNames.json > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFiltered.json
-
+jq --slurpfile ids source/drachtplanten-ids-lowercase.json 'map(select((.Soortnaam | ascii_downcase?) as $id | $ids[0] | index($id)))' tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNames.json > tmp/Bomenbestand-Nootdorp_YpenburgArea_CleanedUpNamesFiltered.json
 # append honeybee tree info to the output
 jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
-       ($enrichment[0][] | select(.["Latijnse naam"] == $item.Soortnaam)) as $match |
+       ($enrichment[0][] | select((.["Latijnse naam"] | ascii_downcase?) == ($item.Soortnaam | ascii_downcase?))) as $match |
        if $match then
            $item + {
                 Nectarwaarde: $match.Nectarwaarde,
@@ -91,19 +88,19 @@ jq '.features | map(select(.geometry.coordinates[0] >= 83395 and .geometry.coord
 jq 'select(.) | map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub("\\([^)]*\\)"; ""))' tmp/bomenkaart-ypenburg.json \
     | jq "map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub(\"'[^']*'\"; \"\"))" \
     | jq 'map(.properties.BOOMSOORT_WETENSCHAPPELIJ |= gsub("^\\s+|\\s+$"; ""))' \
-    | jq 'map(if .Soortnaam == "Acer capillipes x davidii" then .Soortnaam = "Acer capillipes" else . end)' \
-    | jq 'map(if .Soortnaam == "Acer cappadocium subsp." then .Soortnaam = "Acer cappadocicum" else . end)' \
-    | jq 'map(if .Soortnaam == "Acer pseudoplatatnus" then .Soortnaam = "Acer pseudoplatanus" else . end)' \
-    | jq 'map(if .Soortnaam == "Acer rubrum INDIAN SUMMER" then .Soortnaam = "Acer rubrum" else . end)' \
-    | jq 'map(if .Soortnaam == "Acer tataricum  subsp. ginnala" then .Soortnaam = "Acer tataricum  subsp.ginnala" else . end)' \
-    | jq 'map(if .Soortnaam == "Robinia hispida" then .Soortnaam = "Robinia hispida (incl. ssp. fertilis)" else . end)' \
+    | jq 'map(if .properties.BOOMSOORT_WETENSCHAPPELIJ == "Acer capillipes x davidii" then .properties.BOOMSOORT_WETENSCHAPPELIJ = "Acer capillipes" else . end)' \
+    | jq 'map(if .properties.BOOMSOORT_WETENSCHAPPELIJ == "Acer cappadocium subsp." then .properties.BOOMSOORT_WETENSCHAPPELIJ = "Acer cappadocicum" else . end)' \
+    | jq 'map(if .properties.BOOMSOORT_WETENSCHAPPELIJ == "Acer pseudoplatatnus" then .properties.BOOMSOORT_WETENSCHAPPELIJ = "Acer pseudoplatanus" else . end)' \
+    | jq 'map(if .properties.BOOMSOORT_WETENSCHAPPELIJ == "Acer rubrum INDIAN SUMMER" then .properties.BOOMSOORT_WETENSCHAPPELIJ = "Acer rubrum" else . end)' \
+    | jq 'map(if .properties.BOOMSOORT_WETENSCHAPPELIJ == "Acer tataricum  subsp. ginnala" then .properties.BOOMSOORT_WETENSCHAPPELIJ = "Acer tataricum  subsp.ginnala" else . end)' \
+    | jq 'map(if .properties.BOOMSOORT_WETENSCHAPPELIJ == "Robinia hispida" then .properties.BOOMSOORT_WETENSCHAPPELIJ = "Robinia hispida (incl. ssp. fertilis)" else . end)' \
     > tmp/bomenkaart-cleanedup-ypenburg.json
 # filter only trees that are in the list of plants relevant for honeybees
-jq --slurpfile ids source/drachtplanten-ids.json 'map(select(.properties.BOOMSOORT_WETENSCHAPPELIJ as $id | $ids[0] | index($id)))' tmp/bomenkaart-cleanedup-ypenburg.json > tmp/bomenkaart-ypenburg-filtered.json
+jq --slurpfile ids source/drachtplanten-ids-lowercase.json 'map(select((.properties.BOOMSOORT_WETENSCHAPPELIJ | ascii_downcase?) as $id | $ids[0] | index($id)))' tmp/bomenkaart-cleanedup-ypenburg.json > tmp/bomenkaart-ypenburg-filtered.json
 
 # append honeybee tree info to the output
 jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
-       ($enrichment[0][] | select(.["Latijnse naam"] == $item.properties.BOOMSOORT_WETENSCHAPPELIJ)) as $match |
+       ($enrichment[0][] | select((.["Latijnse naam"] | ascii_downcase?) == ($item.properties.BOOMSOORT_WETENSCHAPPELIJ | ascii_downcase?))) as $match |
        if $match then
            $item + {
                properties: ($item.properties + {
@@ -153,11 +150,11 @@ jq 'select(.) | map(.tags.species |= gsub("\\([^)]*\\)"; ""))' tmp/filtered-loca
     > tmp/filtered-cleanup-local-trees-delft.json
 
 # remove all trees not relevant to honeybees based on existance in drachtplanten-ids list
-jq --slurpfile ids source/drachtplanten-ids.json 'map(select(.tags.species as $id | $ids[0] | index($id)))' tmp/filtered-cleanup-local-trees-delft.json > tmp/filtered-only-drachtplanten-local-trees-delft.json
+jq --slurpfile ids source/drachtplanten-ids-lowercase.json 'map(select((.tags.species | ascii_downcase?) as $id | $ids[0] | index($id)))' tmp/filtered-cleanup-local-trees-delft.json > tmp/filtered-only-drachtplanten-local-trees-delft.json
 
 # enrich pollen information to trees
 jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
-       ($enrichment[0][] | select(.["Latijnse naam"] == $item.tags.species)) as $match |
+       ($enrichment[0][] | select((.["Latijnse naam"] | ascii_downcase?) == ($item.tags.species | ascii_downcase?))) as $match |
        if $match then
            $item + {
                tags: ($item.tags + {
@@ -209,6 +206,28 @@ jq 'map({
     body: .body
 })' tmp/merged-output-filtered-pollen.json > tmp/merged-output-filtered-pollenindex-cleanedup-formatted.json
 
+# convert source/DrachtkaartYpenburg-Handmatigeclustering.csv to json structure for easier merging with the monthly output
+echo "converting and merging the manual clustered items from google maps into the automated, monthly generated layers..."
+csvjson source/DrachtkaartYpenburg-Handmatigeclustering.csv > tmp/DrachtkaartYpenburg-Handmatigeclustering.json
+
+# using the .name field find the relevant metadata from the drachtplanten-ids and merge them into it
+jq --slurpfile enrichment source/drachtplanten-imkerpedia.json 'map(. as $item |
+       ($enrichment[0][] | select((.["Latijnse naam"] | ascii_downcase?) == ($item.name | ascii_downcase?))) as $match |
+       if $match then
+           {
+                title: "\($match."Nederlandse naam") (\($match."Latijnse naam"))",
+                body: "Nectarwaarde: \($match.Nectarwaarde), Pollenwaarde: \($match.Pollenwaarde), Bloeit van \($match.SB) t/m \($match.EB)",
+                Nectarwaarde: $match.Nectarwaarde,
+                Pollenwaarde: $match.Pollenwaarde,
+                StartBloei: $match.SB,
+                EindeBloei: $match.EB,
+                AantalBomen: "Onbekend",
+                DebugInfo: "Added from exported manual clustered polygons in Google maps",
+                WKT: $item.WKT
+           }
+       end
+   )' tmp/DrachtkaartYpenburg-Handmatigeclustering.json > tmp/drachtkaart-ypenburg-manualclusteredItems-enriched.json
+
 # split the total tree list into separate once per month: 3/4/5/6/7/8/9 to see if that results in relevancy
 # echo "Going to split the masterlist of trees into blossoming trees per month"
 for i in {4..9}
@@ -219,8 +238,15 @@ do
     echo "clustering trees..."
     # cluster trees into shapes / WKT format
     NODE_OPTIONS='--max-semi-space-size=128 --max-old-space-size=8096' ts-node TreeCoordinateClusterer/index.ts tmp/mergedresult-trees-blossoming_month_$i.json > tmp/mergedresult-trees-clustered-blossoming_month_$i.json
-    jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/mergedresult-trees-clustered-blossoming_month_$i.json > output/mergedresult-trees-clustered-blossoming_month_$i.csv
+    
+    # add manual polygons that are flowering in this same period to the output
+    jq "[.[] | select((.StartBloei | tonumber?) <= $i and (.EindeBloei | tonumber?) >= $i)]" tmp/drachtkaart-ypenburg-manualclusteredItems-enriched.json > tmp/mergedresult-manualpolygons-trees-blossoming_month_$i.json
+    jq -s 'add' tmp/mergedresult-manualpolygons-trees-blossoming_month_$i.json tmp/mergedresult-trees-clustered-blossoming_month_$i.json > tmp/mergedresult-allsources-clustered-trees-blossoming_month_$i.json
+
+
+
     echo "converting to csv"
+    jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/mergedresult-allsources-clustered-trees-blossoming_month_$i.json > output/blossoming_info_month_$i.csv
 done
 
 #
