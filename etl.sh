@@ -239,11 +239,9 @@ do
     # cluster trees into shapes / WKT format
     NODE_OPTIONS='--max-semi-space-size=128 --max-old-space-size=8096' ts-node TreeCoordinateClusterer/index.ts tmp/mergedresult-trees-blossoming_month_$i.json > tmp/mergedresult-trees-clustered-blossoming_month_$i.json
     
-    # add manual polygons that are flowering in this same period to the output
+    echo "Adding manual polygons/clusters that are flowering in this same period to the output"
     jq "[.[] | select((.StartBloei | tonumber?) <= $i and (.EindeBloei | tonumber?) >= $i)]" tmp/drachtkaart-ypenburg-manualclusteredItems-enriched.json > tmp/mergedresult-manualpolygons-trees-blossoming_month_$i.json
     jq -s 'add' tmp/mergedresult-manualpolygons-trees-blossoming_month_$i.json tmp/mergedresult-trees-clustered-blossoming_month_$i.json > tmp/mergedresult-allsources-clustered-trees-blossoming_month_$i.json
-
-
 
     echo "converting to csv"
     jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' tmp/mergedresult-allsources-clustered-trees-blossoming_month_$i.json > output/blossoming_info_month_$i.csv
